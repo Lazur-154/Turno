@@ -340,6 +340,10 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .plan-tier-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .plan-tier-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
 .plan-tier-row:last-child{border-bottom:none}
+.plan-tier-lbl{display:flex;align-items:center;gap:12px;flex:1;min-width:0}
+.btn.small{padding:7px 11px;font-size:12px}
+.badge{font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;font-size:11px;font-weight:700;
+  color:var(--verdigris);border:1px solid var(--verdigris);border-radius:var(--r);padding:5px 9px;white-space:nowrap}
 .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
@@ -441,18 +445,19 @@ const CONFIG = {
 };
 
 /* ---------------- cennik (plany podla poctu ludi) ----------------
-   Zatial bez automatickych platieb — ked niekto napise a zaplati,
-   majitel mu rucne zvysi people_limit v tabulke settings v Supabase.
-   Neskor sa da napojit napr. Stripe Checkout a toto uz bude automaticke. */
+   Platby idu cez Stripe Checkout (funkcia stripe-checkout) — key musi
+   presne sedieť s TIERS v Supabase Edge Function, inak backend odmietne
+   platbu ako "invalid tier". Free plán (key:null) sa nedá kúpiť, len naň
+   spadneš, keď zrušíš predplatné. */
 const PLAN_TIERS = [
-  {upTo:3,   price:0},
-  {upTo:4,   price:1},
-  {upTo:5,   price:6},
-  {upTo:10,  price:12},
-  {upTo:20,  price:22},
-  {upTo:50,  price:40},
-  {upTo:100, price:70},
-  {upTo:Infinity, price:120}
+  {key:null,  upTo:3,   price:0},
+  {key:'t4',  upTo:4,   price:1},
+  {key:'t5',  upTo:5,   price:6},
+  {key:'t10', upTo:10,  price:12},
+  {key:'t20', upTo:20,  price:22},
+  {key:'t50', upTo:50,  price:40},
+  {key:'t100',upTo:100, price:70},
+  {key:'t999',upTo:Infinity, price:120}
 ];
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
 const CONTACT_PHONE = '+421917294556';
@@ -479,6 +484,18 @@ function clearJoinFromUrl(){
   try{
     const u=new URL(location.href);
     u.searchParams.delete('join');
+    history.replaceState(null,'',u);
+  }catch(e){}
+}
+/* Po platbe Stripe presmeruje spat na ?checkout=success alebo ?checkout=cancel
+   (viz success_url/cancel_url v Edge Function stripe-checkout). */
+function checkoutStatusFromUrl(){
+  try{ return new URLSearchParams(location.search).get('checkout'); }catch(e){ return null; }
+}
+function clearCheckoutFromUrl(){
+  try{
+    const u=new URL(location.href);
+    u.searchParams.delete('checkout');
     history.replaceState(null,'',u);
   }catch(e){}
 }
@@ -520,7 +537,8 @@ const S = {
   ready:false,
   installPrompt:null,   // zachyteny beforeinstallprompt event (Android/desktop Chrome)
   installHint:false,    // zobrazit navod na instalaciu (iOS / prehliadace bez natívneho promptu)
-  peopleLimit:3         // kolko zamestnancov moze mat na svojom pláne (Free = 3)
+  peopleLimit:3,        // kolko zamestnancov moze mat na svojom pláne (Free = 3)
+  billingBusy:false     // prebieha presmerovanie na Stripe (checkout/portal) — zabranuje dvojkliku
 };
 const t = k => T[S.lang][k];
 
@@ -1454,18 +1472,31 @@ function planPanel(){
   const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
   const priceLabel = curTier.price===0 ? t('planFreeShort') : (curTier.price==null ? t('planCustomShort') : curTier.price+' €/'+t('perMonth'));
   const atLimit = n>=lim;
+  const isPaid = !!(curTier && curTier.key);
   return `<div class="panel" style="margin-bottom:18px">
     <div class="plan-row">
       <div>
         <div class="eyebrow" style="margin-bottom:6px">${t('yourPlan')}</div>
         <div>${n} / ${lim} ${t('peopleUsageLbl')} · <b>${esc(priceLabel)}</b></div>
       </div>
-      <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
+      <div style="display:flex;gap:10px;align-items:center">
+        ${isPaid?`<button class="linkish" data-act="manage-sub">${t('manageSubBtn')}</button>`:''}
+        <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
+      </div>
     </div>
     ${atLimit?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('limitWarn')}</p>`:''}
   </div>`;
 }
 function pricingModalBody(reached){
+  const n=S.employees.length, lim=S.peopleLimit||3;
+  const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
+  /* Checkout vytvara VZDY novu Stripe subscription. Ked uz clovek plati,
+     ponuknut mu znova "Vybrať plán" na inom riadku by mu založilo druhé,
+     súbežné predplatné (dvojité platenie) — namiesto zmeny plánu.
+     Kym Stripe portál nema nastavene prepinanie planov (na to treba
+     v Stripe Dashboard ulozene Price objekty, ktore zatial nepouzivame),
+     zmenu plánu u existujúceho predplatiteľa rieši majiteľ appky ručne. */
+  const alreadyPaying = !!curTier.key;
   const rows = PLAN_TIERS.map((tier,i)=>{
     let label;
     if(tier.upTo===Infinity){
@@ -1475,7 +1506,16 @@ function pricingModalBody(reached){
       label = t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl');
     }
     const price = tier.price===0 ? t('planFreeShort') : (tier.price==null ? t('planCustomShort') : tier.price+' €/'+t('perMonth'));
-    return `<div class="plan-tier-row"><span>${esc(label)}</span><b>${esc(price)}</b></div>`;
+    const isCurrent = tier.key===curTier.key;
+    let action;
+    if(isCurrent){
+      action = `<span class="badge">${t('currentPlanLbl')}</span>`;
+    } else if(tier.key && !alreadyPaying){
+      action = `<button class="btn ghost small" data-act="upgrade" data-tier="${tier.key}"${S.billingBusy?' disabled':''}>${t('upgradeBtn')}</button>`;
+    } else {
+      action = '';
+    }
+    return `<div class="plan-tier-row"><span class="plan-tier-lbl"><span>${esc(label)}</span><b>${esc(price)}</b></span>${action}</div>`;
   }).join('');
   const subject=encodeURIComponent(t('upgradeMailSubject'));
   const body=encodeURIComponent(t('upgradeMailBody'));
@@ -1485,14 +1525,62 @@ function pricingModalBody(reached){
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
     ${reached?`<p class="help" style="margin:0 0 12px">${t('limitReachedBody')}</p>`:''}
     <div class="plan-tier-list">${rows}</div>
-    <p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
-    <div class="sheet-act">
-      <a class="btn" href="${mailto}">${t('contactCta')}</a>
-      <button class="btn ghost" data-act="close">${t('cancel')}</button>
-    </div>
+    ${alreadyPaying
+      ?`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
+        <div class="sheet-act">
+          <button class="btn" data-act="manage-sub"${S.billingBusy?' disabled':''}>${t('manageSubBtn')}</button>
+          <a class="btn ghost" href="${mailto}">${t('contactCta')}</a>
+        </div>`
+      :`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
+        <div class="sheet-act">
+          <a class="btn ghost" href="${mailto}">${t('contactCta')}</a>
+          <button class="btn ghost" data-act="close">${t('cancel')}</button>
+        </div>`}
   </div></div>`;
 }
 function openPricingModal(reached){ openModal(pricingModalBody(!!reached)); }
+/* ---------- Stripe: checkout (upgrade) a billing portal (sprava predplatneho) ----------
+   Obe funkcie zavolaju Supabase Edge Function, ktora vytvori Stripe session
+   a vrati {url}. Appka na tu adresu rovno presmeruje cely tab (window.location).
+   sb.functions.invoke() sam pripoji prihlasenie (JWT) vlastnika, takze appka
+   nikdy nevidí ani neposiela ziadny Stripe kluc. */
+async function startCheckout(tierKey){
+  if(!LIVE || !sb || S.billingBusy) return;
+  S.billingBusy=true; render();
+  try{
+    toast(t('checkoutRedirect'));
+    const {data,error} = await sb.functions.invoke('stripe-checkout', {body:{tier_key:tierKey}});
+    if(error||!data||!data.url) throw error||new Error('no_url');
+    window.location.href = data.url;
+  }catch(e){
+    console.error('Turno — chyba pri spustení platby:', e);
+    S.billingBusy=false;
+    toastLong('⚠ '+t('checkoutErrMsg'));
+    render();
+  }
+}
+async function openBillingPortal(){
+  if(!LIVE || !sb || S.billingBusy) return;
+  S.billingBusy=true; render();
+  try{
+    const {data,error} = await sb.functions.invoke('stripe-portal', {});
+    if(error){
+      /* Supabase-js vrati pri ne-2xx odpovedi error.context = surova Response —
+         telo {error:"no_subscription"} treba precitat rucne z nej. */
+      let code='';
+      try{ if(error.context&&error.context.json){ const body=await error.context.json(); code=body&&body.error||''; } }catch(e2){}
+      if(/no_subscription/i.test(code||error.message||'')){ toastLong('⚠ '+t('noSubMsg')); S.billingBusy=false; render(); return; }
+      throw error;
+    }
+    if(!data||!data.url) throw new Error('no_url');
+    window.location.href = data.url;
+  }catch(e){
+    console.error('Turno — chyba pri otváraní správy predplatného:', e);
+    S.billingBusy=false;
+    toastLong('⚠ '+t('checkoutErrMsg'));
+    render();
+  }
+}
 /* ---------- POZNÁMKY (naklady na objednavky, ulohy s cenou a pod.) ---------- */
 function viewNotes(){
   const rows=S.notes||[];
@@ -2233,6 +2321,8 @@ document.addEventListener('click',async ev=>{
       else openPersonModal();
       break;
     case 'show-pricing': openPricingModal(false); break;
+    case 'upgrade': startCheckout(el.dataset.tier); break;
+    case 'manage-sub': openBillingPortal(); break;
     case 'save-person': {
       const name=(document.getElementById('p-name').value||'').trim();
       const rate=parseFloat(document.getElementById('p-rate').value)||0;
@@ -2357,6 +2447,29 @@ setInterval(()=>{
     }catch(e){console.warn(e)}
   }
   render();
+  /* Navrat zo Stripe Checkoutu/portálu — webhook, ktory realne aktualizuje
+     people_limit v Supabase, moze dobehnut o pár sekúnd neskor ako presmerovanie
+     spat do appky, tak to na zaciatku par-krat skusime dotiahnut. */
+  const checkoutStatus = checkoutStatusFromUrl();
+  if(checkoutStatus){
+    clearCheckoutFromUrl();
+    if(checkoutStatus==='success'){
+      toastLong(t('checkoutSuccessMsg'));
+      if(LIVE && S.role==='owner'){
+        const before=S.peopleLimit;
+        for(let i=0;i<6;i++){
+          await new Promise(r=>setTimeout(r,2000));
+          try{
+            const st=await DB.loadSettings();
+            S.peopleLimit=st.people_limit||3;
+            if(S.peopleLimit!==before){ render(); break; }
+          }catch(e){ break; }
+        }
+      }
+    } else if(checkoutStatus==='cancel'){
+      toast(t('checkoutCancelMsg'));
+    }
+  }
   /* Ked sa telefon prebudi/appka vrati na popredie, over ci este plati
      prihlasenie — predtym prvy tap po dlhsej pauze proste tichoe zlyhal. */
   document.addEventListener('visibilitychange', async ()=>{
