@@ -432,11 +432,14 @@ const CONFIG = {
    majitel mu rucne zvysi people_limit v tabulke settings v Supabase.
    Neskor sa da napojit napr. Stripe Checkout a toto uz bude automaticke. */
 const PLAN_TIERS = [
-  {upTo:3,  price:0},
-  {upTo:5,  price:9},
-  {upTo:10, price:19},
-  {upTo:20, price:39},
-  {upTo:Infinity, price:null} // individualna cena — napisat
+  {upTo:3,   price:0},
+  {upTo:4,   price:1},
+  {upTo:5,   price:6},
+  {upTo:10,  price:12},
+  {upTo:20,  price:22},
+  {upTo:50,  price:40},
+  {upTo:100, price:70},
+  {upTo:Infinity, price:120}
 ];
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
 
@@ -1395,8 +1398,14 @@ function planPanel(){
   </div>`;
 }
 function pricingModalBody(reached){
-  const rows = PLAN_TIERS.map(tier=>{
-    const label = tier.upTo===Infinity ? t('planCustomRange') : (t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl'));
+  const rows = PLAN_TIERS.map((tier,i)=>{
+    let label;
+    if(tier.upTo===Infinity){
+      const prevMax = PLAN_TIERS[i-1] ? PLAN_TIERS[i-1].upTo : 0;
+      label = t('planOver')+' '+prevMax+' '+t('peopleUsageLbl');
+    } else {
+      label = t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl');
+    }
     const price = tier.price===0 ? t('planFreeShort') : (tier.price==null ? t('planCustomShort') : tier.price+' €/'+t('perMonth'));
     return `<div class="plan-tier-row"><span>${esc(label)}</span><b>${esc(price)}</b></div>`;
   }).join('');
