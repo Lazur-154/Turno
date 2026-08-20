@@ -43,13 +43,14 @@ body{
   min-height:100dvh;
   overscroll-behavior-y:none;
 }
-button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button,input,select,textarea{font-family:inherit;font-size:inherit;color:inherit}
 button{cursor:pointer;border:0;background:none}
-input,select{
+input,select,textarea{
   background:var(--ink);border:1px solid var(--line);border-radius:var(--r);
   padding:10px 12px;color:var(--bone);width:100%;
 }
-input:focus-visible,select:focus-visible,button:focus-visible{
+textarea{resize:vertical;min-height:44px}
+input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{
   outline:2px solid var(--brass);outline-offset:2px;
 }
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -323,6 +324,18 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .invite-row input{flex:1;min-width:0;font-size:13px}
 .invite-row .btn{white-space:nowrap;min-height:44px}
 .install-row{margin-top:14px;text-align:center}
+.support-row{display:flex;gap:10px;flex-wrap:wrap}
+.support-row .btn{flex:1;min-width:140px;white-space:nowrap}
+.note-done td{opacity:.45;text-decoration:line-through}
+.note-actions{white-space:nowrap;text-align:right}
+.note-actions .sr-edit{margin-left:6px}
+.chart-panel{padding-bottom:16px}
+.chart-sum{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--bone);margin:2px 0 10px}
+.chart-sum-lbl{font-family:var(--body);font-size:12px;color:var(--bone-dim);font-weight:400;margin-left:8px;letter-spacing:.02em}
+.bar-chart{width:100%;height:88px;display:block}
+.bar-mark{fill:var(--brass);opacity:.78;transition:opacity .15s}
+.bar-mark:hover{opacity:1}
+.bar-today{fill:var(--brass)}
 .plan-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .plan-tier-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .plan-tier-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -442,6 +455,8 @@ const PLAN_TIERS = [
   {upTo:Infinity, price:120}
 ];
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
+const CONTACT_PHONE = '+421917294556';
+const CONTACT_PHONE_DISPLAY = '+421 917 294 556';
 
 /* ---------------- i18n (preklady su v lang.js) ---------------- */
 const T = window.LANGS;
@@ -491,6 +506,7 @@ const S = {
   inviteCode:null,
   employees:[],
   shifts:[],
+  notes:[],
   weekStart:mondayOf(new Date()),
   calCursor:startOfMonth(new Date()),
   calPick:null,
@@ -725,6 +741,24 @@ const DB = {
     await sbop(()=>sb.from('shifts').delete().eq('employee_id',id));
     await sbop(()=>sb.from('employees').delete().eq('id',id));
   },
+  /* --- poznamky (naklady na objednavky, ulohy a pod.) --- */
+  async loadNotes(){
+    if(!LIVE) return MEM.notes.slice();
+    return sbop(()=>sb.from('notes').select('*').order('created_at',{ascending:false}));
+  },
+  async addNote(row){
+    if(!LIVE){const n={id:'n'+Date.now(),created_at:new Date().toISOString(),done:false,...row};MEM.notes.unshift(n);return n;}
+    const payload = S.ownerId ? {...row, owner_id:S.ownerId} : row;
+    return sbop(()=>sb.from('notes').insert(payload).select().single());
+  },
+  async updateNote(id,patch){
+    if(!LIVE){const r=MEM.notes.find(n=>n.id===id); if(r)Object.assign(r,patch); return;}
+    await sbop(()=>sb.from('notes').update(patch).eq('id',id));
+  },
+  async removeNote(id){
+    if(!LIVE){MEM.notes=MEM.notes.filter(n=>n.id!==id);return;}
+    await sbop(()=>sb.from('notes').delete().eq('id',id));
+  },
   async addShift(row){
     if(!LIVE){const s={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),...row};MEM.shifts.push(s);return s;}
     const payload = S.ownerId ? {...row, owner_id:S.ownerId} : row;
@@ -847,7 +881,11 @@ const DB = {
 };
 
 /* ---------------- demo dataset ---------------- */
-const MEM = {employees:[],shifts:[],settings:{punch_mode:'owner',invite_code:'DEM042',people_limit:3}};
+const MEM = {employees:[],shifts:[],notes:[
+  {id:'n1',title:'Múka 25kg',details:'pre pekáreň, objednať do stredy',price:18.50,done:false,created_at:new Date(Date.now()-2*86400000).toISOString()},
+  {id:'n2',title:'Olej do fritézy 10L',details:'',price:22,done:false,created_at:new Date(Date.now()-86400000).toISOString()},
+  {id:'n3',title:'Obaly na donášku',details:'100ks, dodávateľ Packo',price:34.90,done:true,created_at:new Date(Date.now()-5*86400000).toISOString()}
+],settings:{punch_mode:'owner',invite_code:'DEM042',people_limit:3}};
 function seedDemo(){
   const ago=m=>new Date(Date.now()-m*60000).toISOString();
   MEM.employees = [
@@ -949,7 +987,8 @@ function render(){
         S.role==='employee' ? viewMine() :
         S.view==='today' ? viewToday() :
         S.view==='plan'  ? viewPlan()  :
-        S.view==='cal'   ? viewCal()   : viewPeople()
+        S.view==='cal'   ? viewCal()   :
+        S.view==='notes' ? viewNotes() : viewPeople()
       }</main>
       ${S.role==='owner' ? '' : ''}
     </div>`;
@@ -1068,7 +1107,7 @@ function viewHeader(navHtml){
 }
 
 function navTabs(){
-  const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['people',t('tabPeople')]];
+  const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['notes',t('tabNotes')],['people',t('tabPeople')]];
   return `<nav class="tabs">${items.map(([k,l])=>
     `<button data-act="view" data-v="${k}" aria-pressed="${S.view===k}">${l}</button>`).join('')}</nav>`;
 }
@@ -1284,6 +1323,35 @@ function viewPlan(){
 }
 
 /* ---------- KALENDÁR ---------- */
+/* jednoduchy graf — naklady na mzdy za poslednych 14 dni, bez ziadnej kniznice */
+function costTrendChart(){
+  const DAYS=14;
+  const end=new Date(); end.setHours(0,0,0,0);
+  const start=addDays(end,-(DAYS-1));
+  const byDay={};
+  for(let i=0;i<DAYS;i++) byDay[iso(addDays(start,i))]=0;
+  S.shifts.forEach(s=>{
+    if(!(s.date in byDay)) return;
+    const e=empById(s.employee_id); if(!e) return;
+    byDay[s.date]+=hoursOf(s)*(+e.hourly_rate||0);
+  });
+  const vals=Object.keys(byDay).sort().map(k=>({date:k,v:byDay[k]}));
+  const max=Math.max(1,...vals.map(v=>v.v));
+  const W=336,H=88,GAP=3,BW=(W-GAP*(DAYS-1))/DAYS;
+  const bars=vals.map((v,i)=>{
+    const h=v.v>0?Math.max(3,(v.v/max)*(H-14)):1;
+    const x=i*(BW+GAP), y=H-h;
+    const d=new Date(v.date+'T00:00:00');
+    const lbl=`${pad(d.getDate())}.${pad(d.getMonth()+1)}. — ${money(v.v)}`;
+    return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${BW.toFixed(1)}" height="${h.toFixed(1)}" rx="2.5" class="bar-mark${v.date===todayISO()?' bar-today':''}"><title>${esc(lbl)}</title></rect>`;
+  }).join('');
+  const total=vals.reduce((a,v)=>a+v.v,0);
+  return `<div class="panel chart-panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:2px">${t('costTrend')}</div>
+    <div class="chart-sum">${money(total)}<span class="chart-sum-lbl">${t('last14days')}</span></div>
+    <svg viewBox="0 0 ${W} ${H}" class="bar-chart" role="img" aria-label="${esc(t('costTrend'))}">${bars}</svg>
+  </div>`;
+}
 function viewCal(){
   const c=S.calCursor, y=c.getFullYear(), m=c.getMonth();
   const first=new Date(y,m,1), last=new Date(y,m+1,0);
@@ -1319,7 +1387,7 @@ function viewCal(){
 
   const detail = S.calPick ? dayDetail(S.calPick) : '';
 
-  return `<div class="nav-week">
+  return costTrendChart()+`<div class="nav-week">
       <button data-act="month" data-v="-1">‹</button>
       <span class="lbl">${T[S.lang].months[m]} ${y}</span>
       <button data-act="month" data-v="1">›</button>
@@ -1425,6 +1493,43 @@ function pricingModalBody(reached){
   </div></div>`;
 }
 function openPricingModal(reached){ openModal(pricingModalBody(!!reached)); }
+/* ---------- POZNÁMKY (naklady na objednavky, ulohy s cenou a pod.) ---------- */
+function viewNotes(){
+  const rows=S.notes||[];
+  const total=rows.reduce((a,n)=>a+(n.price!=null?+n.price:0),0);
+  return `<div class="sec-head"><h2>${t('tabNotes')}</h2>
+    <button class="btn" data-act="new-note">+ ${t('addNote')}</button></div>
+    ${rows.length?`<div class="panel" style="padding:0;overflow-x:auto">
+      <table><thead><tr><th>${t('noteTitle')}</th><th>${t('noteDetails')}</th><th>${t('price')}</th><th></th></tr></thead>
+      <tbody>${rows.map(n=>`<tr class="${n.done?'note-done':''}">
+        <td data-act="edit-note" data-id="${n.id}" style="cursor:pointer">${esc(n.title)}</td>
+        <td data-act="edit-note" data-id="${n.id}" style="cursor:pointer">${esc(n.details||'—')}</td>
+        <td class="mono">${n.price!=null?money(+n.price):'—'}</td>
+        <td class="note-actions">
+          <button class="sr-edit" data-act="toggle-note" data-id="${n.id}"${n.done?` title="${esc(t('undo'))}"`:''}>${n.done?'↩':'✓'}</button>
+          <button class="sr-del" data-act="del-note" data-id="${n.id}" title="${esc(t('remove'))}" aria-label="${esc(t('remove'))}">🗑</button>
+        </td></tr>`).join('')}
+        <tr class="sum"><td colspan="2">${t('total')}</td><td class="mono">${money(total)}</td><td></td></tr>
+      </tbody></table>
+    </div>`:`<div class="empty"><p>${t('noNotes')}</p>
+      <button class="btn" data-act="new-note">${t('addNote')}</button></div>`}`;
+}
+function openNoteModal(edit){
+  const n=edit||{};
+  return openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${edit?t('editNote'):t('addNote')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <div class="fg">
+      <div><label>${t('noteTitle')}</label><input id="n-title" autocomplete="off" value="${esc(n.title||'')}"></div>
+      <div><label>${t('noteDetails')}</label><textarea id="n-details" rows="2">${esc(n.details||'')}</textarea></div>
+      <div><label>${t('price')} (€)</label><input id="n-price" type="number" step="0.01" min="0" class="mono" value="${n.price!=null?n.price:''}"></div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn" data-act="save-note" data-id="${edit?n.id:''}">${t('save')}</button>
+    </div>
+  </div></div>`);
+}
 function viewPeople(){
   const plan=planPanel();
   const mode=`<div class="panel" style="margin-bottom:18px">
@@ -1462,7 +1567,18 @@ function viewPeople(){
         </div>
         <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
       </div>`).join(''):`<div class="empty"><p>${t('noPeople')}</p>
-        <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}`;
+        <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
+    ${supportPanel()}`;
+}
+function supportPanel(){
+  return `<div class="panel" style="margin-top:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
+    <p class="help" style="margin:0 0 10px">${t('supportBody')}</p>
+    <div class="support-row">
+      <a class="btn ghost" href="tel:${CONTACT_PHONE}">📞 ${CONTACT_PHONE_DISPLAY}</a>
+      <a class="btn ghost" href="mailto:${CONTACT_EMAIL}">✉ ${t('supportEmail')}</a>
+    </div>
+  </div>`;
 }
 
 /* ---------- zamestnanec: moje zmeny ---------- */
@@ -1923,7 +2039,7 @@ document.addEventListener('click',async ev=>{
     }
 
     case 'demo': {
-      seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
+      seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
       const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3;
       S.role='owner'; S.view='today'; render(); break;
     }
@@ -1934,7 +2050,7 @@ document.addEventListener('click',async ev=>{
       if(!LIVE){ S.loginErr=t('demoNote'); render(); return; }
       try{
         await DB.signIn(email,pass);
-        S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
+        S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
         try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
         S.role='owner'; S.loginErr=''; render();
       }catch(e){ S.loginErr=t('badLogin'); render(); }
@@ -2142,6 +2258,48 @@ document.addEventListener('click',async ev=>{
       }catch(err){ dbErr(err); }
       break;
     }
+    case 'new-note': openNoteModal(); break;
+    case 'edit-note': {
+      const n=(S.notes||[]).find(x=>x.id===el.dataset.id);
+      if(n) openNoteModal(n);
+      break;
+    }
+    case 'save-note': {
+      const id=el.dataset.id;
+      const title=(document.getElementById('n-title').value||'').trim();
+      const details=(document.getElementById('n-details').value||'').trim();
+      const priceRaw=document.getElementById('n-price').value;
+      const price=priceRaw===''?null:parseFloat(priceRaw)||0;
+      if(!title){ toast(t('nameRequired')); return; }
+      try{
+        if(id){
+          await DB.updateNote(id,{title,details,price});
+          const n=S.notes.find(x=>x.id===id); if(n){ n.title=title; n.details=details; n.price=price; }
+        } else {
+          const n=await DB.addNote({title,details,price});
+          S.notes.unshift(n);
+        }
+        closeModal(); toast(t('saved')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'toggle-note': {
+      const id=el.dataset.id;
+      const n=(S.notes||[]).find(x=>x.id===id);
+      if(!n) break;
+      const done=!n.done;
+      try{ await DB.updateNote(id,{done}); n.done=done; render(); }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'del-note': {
+      const id=el.dataset.id;
+      try{
+        await DB.removeNote(id);
+        S.notes=S.notes.filter(x=>x.id!==id);
+        toast(t('removed')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
     case 'close': closeModal(); break;
     case 'scrim': closeModal(); break;   // tap na tmavu plochu zatvori
   }
@@ -2192,6 +2350,7 @@ setInterval(()=>{
       if(ses){
         S.employees=await DB.loadEmployees();
         S.shifts=await DB.loadShifts();
+        try{ S.notes=await DB.loadNotes(); }catch(e){}
         try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
         S.role='owner';
       }
