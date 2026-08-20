@@ -1,0 +1,2114 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Šichta — evidencia zmien</title>
+<meta name="theme-color" content="#0E2530">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#0E2530;
+  --ink-2:#16333F;
+  --ink-3:#1E4150;
+  --line:#2A5163;
+  --bone:#ECEAE1;
+  --bone-dim:#9FB0B8;
+  --brass:#E0A82E;
+  --brass-dark:#B8871F;
+  --verdigris:#3FA787;
+  --rust:#C4553D;
+  --r:4px;
+  --pad:16px;
+  --disp:"Barlow Condensed",ui-sans-serif,sans-serif;
+  --body:"Barlow",ui-sans-serif,system-ui,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0}
+body{
+  background:var(--ink);
+  color:var(--bone);
+  font-family:var(--body);
+  font-size:16px;
+  line-height:1.45;
+  min-height:100vh;
+  min-height:100dvh;
+  overscroll-behavior-y:none;
+}
+button,input,select{font-family:inherit;font-size:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+input,select{
+  background:var(--ink);border:1px solid var(--line);border-radius:var(--r);
+  padding:10px 12px;color:var(--bone);width:100%;
+}
+input:focus-visible,select:focus-visible,button:focus-visible{
+  outline:2px solid var(--brass);outline-offset:2px;
+}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.caps{font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:700;line-height:1.05}
+.eyebrow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.18em;font-weight:600;font-size:12px;color:var(--bone-dim)}
+.hide{display:none !important}
+
+/* ---------- shell ---------- */
+#app{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+header.bar{
+  position:sticky;top:0;z-index:20;background:var(--ink);
+  border-bottom:1px solid var(--line);
+  padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 10px;
+}
+.bar-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:20px}
+.brand b{color:var(--brass);font-weight:700}
+.bar-tools{display:flex;align-items:center;gap:8px}
+.lang{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.lang button{font-family:var(--disp);font-weight:600;letter-spacing:.08em;font-size:13px;
+  padding:12px 12px;min-height:44px;color:var(--bone-dim)}
+.lang button[aria-pressed=true]{background:var(--brass);color:var(--ink)}
+.langsel{width:auto;min-height:44px;padding:10px 12px;font-family:var(--disp);font-weight:600;
+  letter-spacing:.04em;font-size:14px;background:var(--ink);border:1px solid var(--line);border-radius:var(--r)}
+.icon-btn{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-height:44px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:13px;
+  font-weight:600;color:var(--bone-dim)}
+.bar-sub{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px}
+.bar-sub .date{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:14px;color:var(--bone-dim)}
+.bar-sub .clock{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--brass);font-variant-numeric:tabular-nums}
+
+main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;margin:0 auto}
+
+/* ---------- ribbon (today totals) ---------- */
+.ribbon{
+  display:grid;grid-template-columns:repeat(3,1fr);gap:1px;
+  background:var(--line);border:1px solid var(--line);border-radius:var(--r);
+  overflow:hidden;margin-bottom:18px;
+}
+.ribbon div{background:var(--ink-2);padding:10px 12px}
+.ribbon .k{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:11px;color:var(--bone-dim)}
+.ribbon .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:2px}
+.ribbon .v.on{color:var(--verdigris)}
+.ribbon .v.money{color:var(--brass)}
+
+/* ---------- punch card (signature) ---------- */
+.cards{display:grid;gap:12px}
+@media(min-width:760px){.cards{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1080px){.cards{grid-template-columns:repeat(3,1fr)}}
+.card{
+  position:relative;background:var(--ink-2);border:1px solid var(--line);
+  border-radius:var(--r);padding:14px 14px 14px 26px;
+}
+/* perforated stub edge */
+.card::before{
+  content:"";position:absolute;left:11px;top:10px;bottom:10px;width:0;
+  border-left:2px dashed var(--line);
+}
+.card::after{
+  content:"";position:absolute;left:6px;top:calc(50% - 6px);width:12px;height:12px;
+  border-radius:50%;background:var(--ink);border:1px solid var(--line);
+}
+.card.working{border-color:var(--verdigris)}
+.card.working::before{border-color:var(--verdigris)}
+.card.done{opacity:.72}
+.card-top{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.name{font-family:var(--disp);text-transform:uppercase;font-weight:700;letter-spacing:.05em;font-size:20px}
+.rate{font-family:var(--mono);font-size:13px;color:var(--bone-dim);white-space:nowrap}
+.plan{font-family:var(--mono);font-size:13px;color:var(--bone-dim);margin-top:2px}
+.card-act{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
+.punch{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:17px;
+  padding:14px 22px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+  min-width:132px;text-align:center;transition:transform .08s ease;
+}
+.punch:active{transform:scale(.97)}
+.punch.out{background:none;border:2px solid var(--verdigris);color:var(--verdigris)}
+.punch.spent{background:none;border:1px solid var(--line);color:var(--bone-dim);font-weight:600}
+.stamps{font-family:var(--mono);font-size:13px;line-height:1.5}
+.stamps .row{display:flex;gap:8px}
+.stamps .lbl{color:var(--bone-dim);min-width:56px}
+.stamps .live{color:var(--verdigris);font-weight:600}
+.stamps .tot{color:var(--brass);font-weight:600}
+@keyframes stamp{
+  0%{transform:scale(1.5) rotate(-7deg);opacity:0}
+  60%{transform:scale(.94) rotate(1deg);opacity:1}
+  100%{transform:scale(1) rotate(0);opacity:1}
+}
+.stamped{display:inline-block;animation:stamp .34s cubic-bezier(.2,1.4,.4,1) both}
+@media(prefers-reduced-motion:reduce){.stamped{animation:none}}
+
+/* ---------- generic blocks ---------- */
+.sec-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin:0 0 12px}
+.sec-head h2{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:22px;margin:0;font-weight:700}
+.btn{
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-weight:700;font-size:14px;
+  padding:10px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+}
+.btn.ghost{background:none;border:1px solid var(--line);color:var(--bone)}
+.btn.danger{background:none;border:1px solid var(--rust);color:var(--rust);padding:7px 11px;font-size:12px}
+.panel{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);padding:14px}
+.empty{border:1px dashed var(--line);border-radius:var(--r);padding:26px 16px;text-align:center;color:var(--bone-dim)}
+.empty p{margin:0 0 12px}
+.nav-week{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+.nav-week .lbl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:16px;font-weight:700}
+.nav-week button{border:1px solid var(--line);border-radius:var(--r);padding:12px 20px;min-height:48px;
+  min-width:52px;font-family:var(--mono);font-size:18px;color:var(--bone)}
+
+/* day groups (rozvrh) — jeden riadok na den, detaily po tuknuti */
+.day{border-bottom:1px solid var(--line)}
+.day:first-of-type{border-top:1px solid var(--line)}
+.day-row{display:flex;width:100%;align-items:center;justify-content:space-between;gap:14px;
+  padding:16px 6px;min-height:62px;text-align:left}
+.day-when{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:16px;
+  font-weight:700;flex:0 0 auto;display:flex;align-items:center;gap:8px;color:var(--bone)}
+.day-who{font-size:15px;color:var(--bone-dim);text-align:right;line-height:1.35}
+.day-who .none{color:#5A7885;font-style:italic}
+.day.is-today .day-when{color:var(--brass)}
+.day.open{background:var(--ink-2)}
+.day.open .day-row{border-bottom:1px dashed var(--line)}
+.chip{font-family:var(--disp);font-size:10px;letter-spacing:.14em;padding:3px 7px;border-radius:2px;
+  background:var(--brass);color:var(--ink);font-weight:700}
+.day-body{padding:6px 6px 14px}
+.shift-row{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;
+  padding:12px 0;border-bottom:1px solid #21444F}
+.sr-name{font-weight:500;font-size:16px}
+.sr-state{grid-column:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
+.sr-state .mono{font-family:var(--mono)}
+.sr-state .dim{color:var(--bone-dim)}
+.sr-btns{grid-row:1/3;grid-column:2;align-self:center;display:flex;flex-direction:column;gap:6px}
+.sr-edit,.sr-del{border:1px solid var(--line);border-radius:var(--r);
+  padding:10px 12px;min-height:44px;font-size:12px;color:var(--bone-dim);
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;white-space:nowrap}
+.sr-edit{color:var(--brass);border-color:var(--brass)}
+.sr-breaks{grid-column:1/-1}
+.tagl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:10px;
+  font-weight:700;padding:4px 7px;border-radius:2px}
+.tagl.plan{background:var(--ink-3);color:var(--bone-dim)}
+.tagl.on{background:var(--verdigris);color:var(--ink)}
+.tagl.done{background:var(--ink-3);color:var(--verdigris)}
+/* stare styly (uz nepouzite v Plane, drzime pre istotu) */
+.day-group{border-top:1px solid var(--line);padding:12px 0}
+.day-group:last-child{border-bottom:1px solid var(--line)}
+.day-group.today .dg-h{color:var(--brass)}
+.dg-h{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--disp);
+  text-transform:uppercase;letter-spacing:.1em;font-size:14px;font-weight:600;margin-bottom:8px}
+.dg-h .h{font-family:var(--mono);letter-spacing:0;color:var(--bone-dim);font-size:13px}
+.line-item{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:7px 0}
+.line-item .who{font-weight:500}
+.line-item .when{font-family:var(--mono);font-size:14px;color:var(--bone-dim)}
+.li-x{color:var(--bone-dim);font-family:var(--mono);padding:2px 8px;border:1px solid var(--line);border-radius:var(--r);font-size:12px}
+
+/* calendar */
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+.cal .dow{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:11px;
+  color:var(--bone-dim);text-align:center;padding-bottom:4px;font-weight:600}
+.cal .cell{
+  aspect-ratio:1/1;min-height:44px;background:var(--ink-2);border:1px solid transparent;border-radius:var(--r);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;
+}
+.cal .cell.mute{background:transparent;color:#4A6875}
+.cal .cell .d{font-family:var(--mono);font-size:13px}
+.cal .cell .h{font-family:var(--mono);font-size:11px;color:var(--verdigris);font-weight:600}
+.cal .cell.has{border-color:var(--line)}
+.cal .cell.today{border-color:var(--brass)}
+.cal .cell[aria-pressed=true]{background:var(--brass);color:var(--ink)}
+.cal .cell[aria-pressed=true] .h{color:var(--ink)}
+
+/* table */
+.panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:15px;min-width:320px}
+th{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:11px;
+  color:var(--bone-dim);text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);font-weight:600}
+th:first-child{text-align:left}
+td{padding:9px 6px;border-bottom:1px solid #21444F;text-align:right;font-family:var(--mono);font-size:14px}
+td:first-child{text-align:left;font-family:var(--body);font-size:15px}
+tr.brk-tr td{padding:0 0 10px;text-align:left}
+tr.sum td{border-bottom:0;border-top:2px solid var(--line);color:var(--brass);font-weight:600}
+tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em}
+
+/* people */
+.person{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
+  padding:12px 0;border-bottom:1px solid #21444F}
+.person .pname{font-family:var(--disp);text-transform:uppercase;font-weight:700;letter-spacing:.04em;font-size:18px}
+.person .pcode{font-family:var(--mono);font-size:12px;color:var(--bone-dim)}
+.rate-edit{display:flex;align-items:center;gap:5px}
+.lg{font-size:13px;color:var(--bone-dim)}
+.lg.now{color:var(--verdigris);font-weight:600}
+.lg.none{color:#5A7885;font-style:italic}
+.pcode b{font-family:var(--mono);color:var(--brass);font-size:14px;letter-spacing:.08em}
+.rate-edit input{width:74px;text-align:right;font-family:var(--mono);padding:7px 8px}
+.rate-edit span{font-family:var(--mono);font-size:13px;color:var(--bone-dim)}
+@media(max-width:430px){
+  .person{grid-template-columns:1fr auto;row-gap:10px}
+  .person>div:first-child{grid-column:1/-1}
+}
+
+/* form grid */
+.fg{display:grid;gap:10px}
+.fg label{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:11px;color:var(--bone-dim);display:block;margin-bottom:4px}
+.fg .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+
+
+/* ---------- jednoduchy rezim: velke tlacidla, malo textu ---------- */
+.punch-big{
+  display:block;width:100%;margin-top:12px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-weight:700;font-size:22px;
+  padding:20px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+  min-height:64px;transition:transform .08s ease;
+}
+.punch-big:active{transform:scale(.985)}
+.punch-big.out{background:none;border:3px solid var(--verdigris);color:var(--verdigris);padding:17px 16px}
+.punch-sec{display:block;width:100%;margin-top:8px;border:1px solid var(--line);border-radius:var(--r);
+  padding:14px;min-height:52px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;
+  font-weight:600;font-size:15px;color:var(--bone-dim)}
+.punch-sec:active{background:var(--ink-3)}
+.status.pause{color:var(--brass);font-weight:500}
+.card.paused{border-color:var(--brass)}
+.card.paused::before{border-color:var(--brass)}
+.status{font-size:16px;margin-top:4px;color:var(--bone-dim)}
+.status.on{color:var(--verdigris);font-weight:500}
+.status.fin{color:var(--bone-dim)}
+.status b{font-family:var(--mono);font-weight:600;font-size:16px}
+.bl{margin-top:10px;border:1px solid var(--line);border-radius:var(--r);padding:10px 12px;
+  background:rgba(0,0,0,.14)}
+.bl.compact{margin-top:8px;padding:8px 10px}
+.bl-h{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:10px;
+  font-weight:700;color:var(--bone-dim);margin-bottom:6px}
+.bl-row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;
+  font-size:14px;padding:3px 0}
+.bl-n{color:#5A7885;font-family:var(--mono);font-size:12px}
+.bl-t{font-size:14px}
+.bl-d{color:var(--brass);font-size:13px;text-align:right}
+.bl-sum{border-top:1px solid var(--line);margin-top:5px;padding-top:6px}
+.bl-sum .bl-t{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:11px;
+  color:var(--bone-dim)}
+.bl-sum .bl-d{font-weight:600}
+.card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;
+  min-height:44px}
+.undo-row{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:14px;color:var(--bone-dim)}
+.undo-row button{color:var(--brass);font-weight:600;text-decoration:underline;
+  padding:10px 4px;min-height:44px;font-size:15px}
+.linkish{color:var(--brass);text-decoration:underline;font-size:15px;padding:12px 6px;min-height:44px}
+.plainline{font-size:17px;margin:0 0 18px;padding:12px 14px;background:var(--ink-2);
+  border:1px solid var(--line);border-radius:var(--r)}
+.plainline .nm{color:var(--verdigris);font-weight:600}
+.plainline.quiet{color:var(--bone-dim)}
+.toggle{display:flex;align-items:center;gap:10px;margin-bottom:16px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:12px;
+  color:var(--bone-dim);font-weight:600}
+.switch{position:relative;width:46px;height:26px;border-radius:13px;background:var(--ink-3);
+  border:1px solid var(--line);flex:0 0 auto;transition:background .15s}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
+  background:var(--bone-dim);transition:transform .15s,background .15s}
+.toggle[aria-pressed=true] .switch{background:var(--brass);border-color:var(--brass)}
+.toggle[aria-pressed=true] .switch::after{transform:translateX(20px);background:var(--ink)}
+.brk-row{display:grid;grid-template-columns:1fr auto 1fr auto;align-items:center;gap:8px;margin-bottom:8px}
+.brk-row input{padding:12px 10px;font-family:var(--mono)}
+.brk-dash{color:var(--bone-dim)}
+.brk-row.bad input{border-color:var(--rust);background:rgba(196,85,61,.12)}
+.brk-row.bad .brk-dash{color:var(--rust)}
+.brk-del{width:44px;height:44px;border:1px solid var(--line);border-radius:var(--r);
+  color:var(--bone-dim);font-size:14px}
+.daypick{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
+.daypick button{border:1px solid var(--line);border-radius:var(--r);padding:10px 2px;min-height:58px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--bone-dim)}
+.daypick button[aria-pressed=true]{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.dp-d{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:12px}
+.dp-n{font-family:var(--mono);font-size:11px;opacity:.75}
+.invite-row{display:flex;gap:8px;margin-bottom:10px}
+.invite-row input{flex:1;min-width:0;font-size:13px}
+.invite-row .btn{white-space:nowrap;min-height:44px}
+.presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
+  color:var(--bone);text-align:center;line-height:1.2}
+.presets button[aria-pressed=true]{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.presets button small{display:block;font-family:var(--mono);font-size:12px;letter-spacing:0;
+  opacity:.7;text-transform:none;margin-top:2px}
+.help{font-size:14px;color:var(--bone-dim);margin:0 0 12px}
+.quick-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
+  padding:10px 0;border-bottom:1px solid #21444F}
+.quick-row:last-child{border-bottom:0}
+.quick-name{font-family:var(--disp);text-transform:uppercase;font-weight:700;letter-spacing:.04em;font-size:17px}
+.quick-btn{border:2px solid var(--brass);color:var(--brass);border-radius:var(--r);
+  padding:12px 16px;min-height:48px;font-family:var(--disp);text-transform:uppercase;
+  letter-spacing:.08em;font-weight:700;font-size:14px;white-space:nowrap}
+.quick-btn:active{background:var(--brass);color:var(--ink)}
+.addrow{display:block;width:100%;margin-top:10px;border:1px dashed var(--line);border-radius:var(--r);
+  padding:14px;min-height:52px;color:var(--bone-dim);font-family:var(--disp);
+  text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:13px}
+nav.tabs button{min-height:56px}
+.li-x{min-height:44px;min-width:44px}
+
+/* nav */
+nav.tabs{
+  position:fixed;bottom:0;left:0;right:0;z-index:20;display:flex;
+  background:var(--ink-2);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);
+}
+/* nav je v <header>, ale fixed ho na mobile vytrhne dole. na PC zostane v hlavicke. */
+nav.tabs button{
+  flex:1;padding:11px 4px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;
+  font-size:12px;font-weight:600;color:var(--bone-dim);border-top:2px solid transparent;
+}
+nav.tabs button[aria-pressed=true]{color:var(--brass);border-top-color:var(--brass)}
+@media(min-width:900px){
+  header.bar{padding-bottom:0}
+  nav.tabs{position:static;bottom:auto;width:100%;margin:10px 0 0;background:transparent;
+    border-top:0;border-bottom:0;padding:0}
+  nav.tabs button{flex:0 0 auto;padding:12px 20px;border-top:0;border-bottom:2px solid transparent}
+  nav.tabs button[aria-pressed=true]{border-bottom-color:var(--brass)}
+  main{padding-bottom:40px}
+}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(5,18,24,.78);z-index:40;display:flex;
+  align-items:flex-end;justify-content:center;padding:0}
+@media(min-width:640px){.scrim{align-items:center;padding:20px}}
+.sheet{background:var(--ink-2);border:1px solid var(--line);border-radius:var(--r);
+  width:100%;max-width:440px;padding:18px;padding-bottom:calc(18px + env(safe-area-inset-bottom));
+  max-height:88vh;max-height:88svh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sheet-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0 0 14px}
+.sheet h3{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:20px;margin:0;font-weight:700}
+.sheet-x{flex:0 0 auto;width:48px;height:48px;border:1px solid var(--line);border-radius:var(--r);
+  font-size:22px;line-height:1;color:var(--bone-dim);display:flex;align-items:center;justify-content:center}
+.sheet-x:active{background:var(--ink-3)}
+body.locked{overflow:hidden}
+.sheet-act{display:flex;gap:10px;margin-top:16px}
+.sheet-act .btn{flex:1}
+
+/* login */
+.login{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
+  padding:32px var(--pad);max-width:420px;margin:0 auto;gap:20px}
+.login .logo{font-family:var(--disp);text-transform:uppercase;letter-spacing:.2em;font-size:34px;font-weight:700}
+.login .logo b{color:var(--brass)}
+.login .tag{color:var(--bone-dim);margin-top:2px;font-size:15px}
+.seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
+.seg button{flex:1;padding:10px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
+  font-size:13px;font-weight:600;color:var(--bone-dim)}
+.seg button[aria-pressed=true]{background:var(--brass);color:var(--ink)}
+.err{color:var(--rust);font-size:14px;min-height:20px}
+.mode-note{font-size:13px;color:var(--bone-dim);border-top:1px solid var(--line);padding-top:14px}
+
+/* toast */
+#toast.long{background:var(--rust);color:#fff;text-transform:none;letter-spacing:0;
+  font-family:var(--body);font-weight:500;font-size:14px;line-height:1.4;
+  max-width:min(92vw,420px);text-align:left;padding:14px 16px}
+#toast{position:fixed;bottom:104px;left:50%;transform:translateX(-50%);z-index:60;
+  background:var(--bone);color:var(--ink);padding:10px 16px;border-radius:var(--r);
+  font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;
+  max-width:90vw;text-align:center}
+</style>
+</head>
+<body>
+
+<div id="root"></div>
+<div id="modal"></div>
+
+<script src="lang.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+/* ============================================================
+   ŠICHTA v2 — konfigurácia
+   Doplň údaje z Supabase (Project Settings → API).
+   Ak zostanú prázdne, appka beží v DEMO režime (dáta v pamäti).
+   ============================================================ */
+const CONFIG = {
+  SUPABASE_URL: 'https://ezdphdwdqyhcgwfoiivj.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6ZHBoZHdkcXloY2d3Zm9paXZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODM0NzMsImV4cCI6MjEwMjQ1OTQ3M30.TbbjCucAZg410-q2Me6CVAHnPkw9Mwul-RhC2hc5SS4'
+};
+
+/* ---------------- i18n (preklady su v lang.js) ---------------- */
+const T = window.LANGS;
+const LANG_CODES = Object.keys(T);
+/* jazyk sa drzi v adrese: ...?lang=hr  — vlastnik moze poslat kazdemu
+   zamestnancovi link uz v jeho jazyku a po instalacii na plochu to tak zostane */
+function langFromUrl(){
+  try{
+    const v=new URLSearchParams(location.search).get('lang');
+    if(v&&T[v]) return v;
+  }catch(e){}
+  return 'sk';
+}
+/* Vlastnik posle novemu clovekovi odkaz s ?join=KOD — appka to spozna
+   a rovno mu ukaze "napis meno a pripoj sa" namiesto prihlasenia. */
+function joinCodeFromUrl(){
+  try{ return new URLSearchParams(location.search).get('join'); }catch(e){ return null; }
+}
+function clearJoinFromUrl(){
+  try{
+    const u=new URL(location.href);
+    u.searchParams.delete('join');
+    history.replaceState(null,'',u);
+  }catch(e){}
+}
+function setLang(code){
+  if(!T[code])return;
+  S.lang=code;
+  document.documentElement.lang=code;
+  try{
+    const u=new URL(location.href);
+    u.searchParams.set('lang',code);
+    history.replaceState(null,'',u);
+  }catch(e){}
+}
+
+/* ---------------- state ---------------- */
+const S = {
+  lang:'sk',   // prepise sa z adresy pri starte
+  view:'today',
+  role:null,          // 'owner' | 'employee'
+  me:null,            // employee object when role==='employee'
+  loginTab:'owner',
+  loginErr:'',
+  signupDone:false,
+  joinCode:null,
+  inviteCode:null,
+  employees:[],
+  shifts:[],
+  weekStart:mondayOf(new Date()),
+  calCursor:startOfMonth(new Date()),
+  calPick:null,
+  justStamped:null,
+  detail:false,        // false = jednoduchy rezim (default)
+  undo:null,           // {id, field} — kratke okno na vratenie
+  dayOpen:null,        // rozbaleny den v Plane (naraz len jeden)
+  punchMode:'owner',   // 'owner' = kliká len vlastník, 'self' = aj zamestnanci
+  myCode:null,         // kód, ktorým sa zamestnanec prihlásil
+  ownerId:null,        // ID prihláseného vlastníka (posielame ho pri zápise)
+  ready:false
+};
+const t = k => T[S.lang][k];
+
+/* ---------------- helpers ---------------- */
+function pad(n){return String(n).padStart(2,'0')}
+function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
+function todayISO(){return iso(new Date())}
+function mondayOf(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
+function startOfMonth(d){return new Date(d.getFullYear(),d.getMonth(),1)}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function hhmm(ts){if(!ts)return'—';const d=new Date(ts);return pad(d.getHours())+':'+pad(d.getMinutes())}
+/* Postgres vracia time ako "16:00:00" — skrátime na HH:MM */
+function hm(s){return s?String(s).slice(0,5):'—'}
+/* Zmena nemusi byt naplanovana - niekto len zaskoci. Vtedy nepiseme "—–—". */
+function planLabel(sh){
+  if(!sh.plan_start && !sh.plan_end) return t('unplanned');
+  return hm(sh.plan_start)+'\u2013'+hm(sh.plan_end);
+}
+function num(n,dec=2){
+  const loc=(T[S.lang]&&T[S.lang].locale)||'sk-SK';
+  return n.toLocaleString(loc,{minimumFractionDigits:dec,maximumFractionDigits:dec});
+}
+function cur(){return (T[S.lang]&&T[S.lang].cur)||'\u20ac'}
+function money(n){return num(n,2)+' '+cur()}
+/* ---- prestavky ----
+   sh.breaks = [{s:ISO, e:ISO|null}, ...]  — kolko chce, nie len jedna.
+   grossHoursOf = cas na pracovisku, breakHoursOf = sucet prestavok,
+   hoursOf = CISTY odpracovany cas (to, co sa plati). */
+function brs(sh){return Array.isArray(sh.breaks)?sh.breaks:[]}
+/* Vypis kazdej prestavky od-do so dlzkou. Aby bolo vidno KEDY a AKO DLHO,
+   nie len sucet. Pouzite na Dnes, v Plane aj v Historii. */
+function breakList(sh,compact){
+  const b=brs(sh); if(!b.length)return '';
+  const cap = sh.departure ? new Date(sh.departure).getTime() : Date.now();
+  const rows=b.map((x,i)=>{
+    if(!x.s)return '';
+    const st=new Date(x.s).getTime();
+    const en=x.e?new Date(x.e).getTime():cap;
+    const len=Math.max(0,(Math.min(en,cap)-st)/3600000);
+    const to = x.e ? hhmm(x.e) : '\u2026';
+    return `<div class="bl-row">
+      <span class="bl-n">${i+1}.</span>
+      <span class="bl-t mono">${hhmm(x.s)}\u2013${to}</span>
+      <span class="bl-d">${durLong(len)}</span>
+    </div>`;
+  }).join('');
+  return `<div class="bl ${compact?'compact':''}">
+    <div class="bl-h">${t('breakDetail')}</div>
+    ${rows}
+    <div class="bl-row bl-sum">
+      <span class="bl-n"></span>
+      <span class="bl-t">${t('total')}</span>
+      <span class="bl-d">${durLong(breakHoursOf(sh))}</span>
+    </div>
+  </div>`;
+}
+function onBreak(sh){const b=brs(sh);return b.length&&!b[b.length-1].e ? b[b.length-1] : null}
+function grossHoursOf(sh,now=Date.now()){
+  if(!sh.arrival)return 0;
+  const end = sh.departure ? new Date(sh.departure).getTime() : now;
+  return Math.max(0,(end-new Date(sh.arrival).getTime())/3600000);
+}
+function breakHoursOf(sh,now=Date.now()){
+  const cap = sh.departure ? new Date(sh.departure).getTime() : now;
+  return brs(sh).reduce((a,b)=>{
+    if(!b.s)return a;
+    const st=new Date(b.s).getTime();
+    const en=b.e?new Date(b.e).getTime():cap;
+    return a+Math.max(0,(Math.min(en,cap)-st)/3600000);
+  },0);
+}
+function hoursOf(sh,now=Date.now()){
+  return Math.max(0, grossHoursOf(sh,now)-breakHoursOf(sh,now));
+}
+/* trvanie SLOVAMI. "8:12" sa cita ako hodina na hodinach — to matie.
+   "8 h 12 min" sa zamenit neda. */
+function durLong(h){
+  const m=Math.round(h*60), hh=Math.floor(m/60), mm=m%60;
+  if(hh&&mm) return hh+' '+t('hUnit')+' '+mm+' '+t('minUnit');
+  if(hh)      return hh+' '+t('hUnit');
+  return mm+' '+t('minUnit');
+}
+function empById(id){return S.employees.find(e=>e.id===id)}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function shiftsOn(date){
+  return S.shifts.filter(s=>s.date===date)
+    .sort((a,b)=>(a.plan_start||'').localeCompare(b.plan_start||''));
+}
+function makeCode(){
+  const used=new Set(S.employees.map(e=>String(e.access_code)));
+  for(let i=0;i<200;i++){
+    const c=String(Math.floor(1000+Math.random()*9000));
+    if(!used.has(c)) return c;
+  }
+  return String(Math.floor(1000+Math.random()*9000));
+}
+/* Chyba z databazy sa MUSI dostat na obrazovku. Predtym zlyhal zapis
+   potichu — okno len zostalo stat a clovek nemal ako zistit, co sa deje. */
+function dbErr(e){
+  const msg = (e && (e.message || e.error_description || e.hint || e.details)) || String(e);
+  console.error('Šichta — chyba databázy:', e);
+  toastLong('⚠ ' + msg);
+}
+function toastLong(msg){
+  const old=document.getElementById('toast'); if(old)old.remove();
+  const el=document.createElement('div'); el.id='toast'; el.className='long';
+  el.textContent=msg;
+  document.body.appendChild(el);
+  setTimeout(()=>{ if(el.parentNode) el.remove(); },9000);
+}
+
+let undoTimer=null;
+function setUndo(id,field){
+  S.undo={id,field};
+  clearTimeout(undoTimer);
+  undoTimer=setTimeout(()=>{S.undo=null;if(S.role==='owner'&&S.view==='today')render();},9000);
+}
+function toast(msg){
+  const old=document.getElementById('toast');if(old)old.remove();
+  const el=document.createElement('div');el.id='toast';el.textContent=msg;
+  document.body.appendChild(el);setTimeout(()=>el.remove(),1900);
+}
+
+/* ============================================================
+   DATA LAYER — Supabase, alebo demo v pamäti
+   ============================================================ */
+const LIVE = !!(CONFIG.SUPABASE_URL && CONFIG.SUPABASE_ANON_KEY);
+let sb = null;
+if(LIVE && window.supabase){
+  sb = window.supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+}
+
+/* ---- odolnost voci vypadkom ----
+   Ked appka chvilu bezi na pozadi (telefon v vrecku), prihlasenie moze
+   medzitym vyprsat alebo siet na chvilu vypadne. Predtym to znamenalo
+   tichu/nezrozumitelnu chybu pri najblizsom zapise. Teraz to sbop()
+   skusi same opravit: pri chybe pripominajucej vyprsane prihlasenie
+   obnovi session a zapis zopakuje, pri sietovej chybe chvilu pockia
+   a tiez skusi znova. Az ked ani to nepomoze, chyba ide na obrazovku. */
+function isRetryableErr(e){
+  if(!e) return false;
+  const msg = String((e.message||'')+' '+(e.code||'')+' '+(e.status||''));
+  return /jwt|jws|token|expired|401|403|permission denied for|PGRST301|failed to fetch|networkerror|network error|load failed/i.test(msg);
+}
+async function sbop(factory){
+  let res = await factory();
+  if(res && res.error && isRetryableErr(res.error)){
+    try{ if(sb) await sb.auth.refreshSession(); }catch(_){}
+    await new Promise(r=>setTimeout(r,500));
+    res = await factory();
+  }
+  if(res && res.error) throw res.error;
+  return res ? res.data : undefined;
+}
+
+const DB = {
+  async signIn(email,password){
+    if(!LIVE) throw new Error('demo');
+    const {data,error} = await sb.auth.signInWithPassword({email,password});
+    if(error) throw error;
+    S.ownerId = data.user && data.user.id;
+    return data.user;
+  },
+  async signUp(email,password){
+    if(!LIVE) throw new Error('demo');
+    const {data,error} = await sb.auth.signUp({email,password,
+      options:{emailRedirectTo: location.href}});
+    if(error) throw error;
+    return data.user;
+  },
+  async signOut(){ if(LIVE&&sb) await sb.auth.signOut(); },
+  async session(){
+    if(!LIVE||!sb) return null;
+    const {data}=await sb.auth.getSession();
+    if(data.session&&data.session.user) S.ownerId=data.session.user.id;
+    return data.session;
+  },
+
+  async loadEmployees(){
+    if(!LIVE) return MEM.employees.slice();
+    return sbop(()=>sb.from('employees').select('*').order('name'));
+  },
+  async loadShifts(){
+    if(!LIVE) return MEM.shifts.slice();
+    const from = iso(addDays(new Date(),-400));
+    return sbop(()=>sb.from('shifts').select('*').gte('date',from).order('date'));
+  },
+  async addEmployee(row){
+    if(!LIVE){const e={id:'e'+Date.now(),...row};MEM.employees.push(e);return e;}
+    // Kod sa moze zrazit s uz existujucim (unique owner_id+access_code).
+    // Skusime az 6x s novym kodom, nez to vzdame.
+    let lastErr=null;
+    for(let attempt=0; attempt<6; attempt++){
+      const payload = {...row, access_code: attempt===0 ? row.access_code : makeCode()};
+      if(S.ownerId) payload.owner_id = S.ownerId;
+      try{
+        return await sbop(()=>sb.from('employees').insert(payload).select().single());
+      }catch(error){
+        lastErr=error;
+        // 23505 = duplicitny zaznam -> ma zmysel skusit iny kod
+        if(error.code!=='23505') break;
+      }
+    }
+    throw lastErr;
+  },
+  async updateEmployee(id,patch){
+    if(!LIVE){const r=MEM.employees.find(e=>e.id===id); if(r)Object.assign(r,patch); return;}
+    await sbop(()=>sb.from('employees').update(patch).eq('id',id));
+  },
+  async removeEmployee(id){
+    if(!LIVE){
+      MEM.employees=MEM.employees.filter(e=>e.id!==id);
+      MEM.shifts=MEM.shifts.filter(s=>s.employee_id!==id);return;
+    }
+    await sbop(()=>sb.from('shifts').delete().eq('employee_id',id));
+    await sbop(()=>sb.from('employees').delete().eq('id',id));
+  },
+  async addShift(row){
+    if(!LIVE){const s={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),...row};MEM.shifts.push(s);return s;}
+    const payload = S.ownerId ? {...row, owner_id:S.ownerId} : row;
+    return sbop(()=>sb.from('shifts').insert(payload).select().single());
+  },
+  async updateShift(id,patch){
+    if(!LIVE){const r=MEM.shifts.find(s=>s.id===id); if(r)Object.assign(r,patch); return;}
+    await sbop(()=>sb.from('shifts').update(patch).eq('id',id));
+  },
+  async removeShift(id){
+    if(!LIVE){MEM.shifts=MEM.shifts.filter(s=>s.id!==id);return;}
+    await sbop(()=>sb.from('shifts').delete().eq('id',id));
+  },
+
+  /* zamestnanec sa hlasi kodom — vidi len svoje zmeny.
+     zaroven si zapiseme, ze sa prihlasil, aby to vlastnik videl. */
+  async employeeByCode(code){
+    if(!LIVE){
+      const e=MEM.employees.find(x=>String(x.access_code)===code);
+      if(e) e.last_login=new Date().toISOString();
+      return e||null;
+    }
+    const data = await sbop(()=>sb.rpc('emp_me',{p_code:code}));
+    const row=(data&&data[0])||null;
+    if(row&&row.punch_mode) S.punchMode=row.punch_mode;
+    return row;
+  },
+  /* --- nastavenie, kto zapisuje prichody a pozyvaci kod pre novych ludi --- */
+  async loadSettings(){
+    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code};
+    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code').maybeSingle());
+    if(!data){
+      // prvy start: zaloz riadok s predvolenym nastavenim (pozyvaci kod si databaza vygeneruje sama)
+      const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:'owner'} : {punch_mode:'owner'};
+      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code').single());
+      return ins||{punch_mode:'owner'};
+    }
+    return data;
+  },
+  async savePunchMode(mode){
+    if(!LIVE){ MEM.settings.punch_mode=mode; return; }
+    const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:mode} : {punch_mode:mode};
+    await sbop(()=>sb.from('settings').upsert(payload,{onConflict:'owner_id'}));
+  },
+  /* Novy pozyvaci kod - stary link tym padom prestane fungovat.
+     Uzitocne, ak si niekto cudzi kod niekde vsimol. */
+  async regenerateInvite(){
+    const code = Array.from({length:6},()=>'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+    if(!LIVE){ MEM.settings.invite_code=code; return code; }
+    const payload = S.ownerId ? {owner_id:S.ownerId, invite_code:code} : {invite_code:code};
+    await sbop(()=>sb.from('settings').upsert(payload,{onConflict:'owner_id'}));
+    return code;
+  },
+  /* Novy clovek sa pripoji sam cez odkaz s pozyvacim kodom - vlastnik
+     ho nemusi rucne pridavat. Databaza si sama overi, ci kod patri
+     nejakemu vlastnikovi, a vytvori zamestnanca aj jeho pristupovy kod. */
+  async selfRegister(inviteCode, name){
+    if(!inviteCode) throw new Error('no invite');
+    if(!LIVE){
+      const e={id:'e'+Date.now(), name, hourly_rate:0, access_code:makeCode()};
+      MEM.employees.push(e); return e;
+    }
+    const data = await sbop(()=>sb.rpc('emp_self_register',{p_invite:inviteCode, p_name:name}));
+    return (data&&data[0])||null;
+  },
+
+  /* Zamestnanec si zapisuje sam. Ide to cez funkciu v databaze, ktora
+     overi kod, ze zmena je jeho, ze je dnesna a ze to vlastnik povolil.
+     Klient tomu neveri — rozhoduje databaza. */
+  /* Zamestnanec prisel bez naplanovanej zmeny. Zmenu zalozi databaza,
+     ktora zaroven overi, ze to vlastnik povolil. */
+  async empStart(code){
+    if(!LIVE){
+      if(MEM.settings.punch_mode!=='self') throw new Error('not allowed');
+      const me=MEM.employees.find(e=>String(e.access_code)===code);
+      if(!me) throw new Error('unknown code');
+      const open=MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival&&!x.departure);
+      if(open) throw new Error('already on shift');
+      const sh={id:'s'+Date.now(),employee_id:me.id,date:todayISO(),
+                plan_start:null,plan_end:null,arrival:new Date().toISOString(),
+                departure:null,breaks:[]};
+      MEM.shifts.push(sh); return sh;
+    }
+    const data = await sbop(()=>sb.rpc('emp_start',{p_code:code}));
+    return (data&&data[0])||null;
+  },
+
+  async empPunch(code, shiftId, action){
+    if(!LIVE){
+      if(MEM.settings.punch_mode!=='self') throw new Error('not allowed');
+      const sh=MEM.shifts.find(x=>x.id===shiftId);
+      const me=MEM.employees.find(e=>String(e.access_code)===code);
+      if(!sh||!me||sh.employee_id!==me.id||sh.date!==todayISO()) throw new Error('not allowed');
+      const nowIso=new Date().toISOString();
+      const list=Array.isArray(sh.breaks)?sh.breaks.slice():[];
+      const open=list.length&&!list[list.length-1].e ? list[list.length-1] : null;
+      if(action==='in'  && !sh.arrival) sh.arrival=nowIso;
+      if(action==='out' && sh.arrival && !sh.departure){
+        if(open){ list[list.length-1]={...open,e:nowIso}; sh.breaks=list; }
+        sh.departure=nowIso;
+      }
+      if(action==='break_start' && sh.arrival && !sh.departure && !open){
+        list.push({s:nowIso,e:null}); sh.breaks=list;
+      }
+      if(action==='break_end' && open){ list[list.length-1]={...open,e:nowIso}; sh.breaks=list; }
+      return sh;
+    }
+    const data = await sbop(()=>sb.rpc('emp_punch',{p_code:code,p_shift:shiftId,p_action:action}));
+    return (data&&data[0])||null;
+  },
+
+  async employeeShifts(code){
+    if(!LIVE) {
+      const me=MEM.employees.find(e=>String(e.access_code)===code);
+      return me?MEM.shifts.filter(s=>s.employee_id===me.id):[];
+    }
+    const data = await sbop(()=>sb.rpc('emp_shifts',{p_code:code}));
+    return data||[];
+  }
+};
+
+/* ---------------- demo dataset ---------------- */
+const MEM = {employees:[],shifts:[],settings:{punch_mode:'owner',invite_code:'DEM042'}};
+function seedDemo(){
+  const ago=m=>new Date(Date.now()-m*60000).toISOString();
+  MEM.employees = [
+    {id:'e1',name:'Martina Kollárová',hourly_rate:6.80,access_code:'1042',last_login:ago(4)},
+    {id:'e2',name:'Peter Hudák',hourly_rate:7.20,access_code:'2317',last_login:ago(95)},
+    {id:'e3',name:'Lucia Bednárová',hourly_rate:6.50,access_code:'3580',last_login:ago(60*30)},
+    {id:'e4',name:'Tomáš Varga',hourly_rate:8.00,access_code:'4726',last_login:null},
+    {id:'e5',name:'Simona Jurčová',hourly_rate:6.50,access_code:'5194',last_login:ago(8)}
+  ];
+  MEM.shifts=[];
+  const patterns=[['08:00','16:00'],['16:00','23:00'],['10:00','18:00'],['12:00','20:00']];
+  let n=0;
+  const jitter=(base,spread)=>base+Math.floor(Math.random()*spread); // vzdy dopredu, nikdy do minusu
+
+  // historia: 34 dni dozadu, realne prichody o par minut po plane
+  for(let back=34;back>=1;back--){
+    const d=addDays(new Date(),-back);
+    const dow=d.getDay();
+    const count=(dow===5||dow===6)?3:2;
+    const pool=[...MEM.employees].sort(()=>Math.random()-0.5).slice(0,count);
+    pool.forEach((e,i)=>{
+      const [ps,pe]=patterns[i%patterns.length];
+      const a=new Date(d); a.setHours(+ps.slice(0,2), jitter(0,9), 0,0);      // 08:00–08:08
+      const b=new Date(d); b.setHours(+pe.slice(0,2), jitter(0,18), 0,0);     // 16:00–16:17
+      const bk=[];
+      const p1=new Date(a.getTime()+150*60000), p1e=new Date(p1.getTime()+30*60000);
+      if(p1e<b) bk.push({s:p1.toISOString(),e:p1e.toISOString()});
+      MEM.shifts.push({id:'s'+(++n),employee_id:e.id,date:iso(d),plan_start:ps,plan_end:pe,
+        arrival:a.toISOString(),departure:b.toISOString(),breaks:bk});
+    });
+  }
+
+  // DNES — musi vyzerat rozumne, ci to niekto otvori rano alebo v noci.
+  // Predtym sa o 7:00 vygenerovala zmena "22:55–03:13", co vyzeralo pokazene.
+  const td=todayISO(), now=new Date();
+  const dayStart=new Date(now); dayStart.setHours(6,0,0,0);
+  const push=(emp,ps,pe,arr,dep)=>MEM.shifts.push({id:'s'+(++n),employee_id:emp,date:td,
+    plan_start:ps,plan_end:pe,arrival:arr?arr.toISOString():null,departure:dep?dep.toISOString():null});
+
+  // jedna zmena prave bezi — prisiel pred ~3h, ale nikdy pred 6:00
+  let runIn=new Date(now.getTime()-2*3600000);
+  if(runIn<dayStart) runIn=new Date(now.getTime()-40*60000);
+  const runEnd=(runIn.getHours()+8)%24;
+  push('e2', pad(runIn.getHours())+':00', pad(runEnd)+':00', runIn, null);
+  // bezicej zmene dame jednu uz ukoncenu prestavku, ak sa vojde
+  const rs=new Date(runIn.getTime()+30*60000), re_=new Date(runIn.getTime()+45*60000);
+  if(re_<now) MEM.shifts[MEM.shifts.length-1].breaks=[{s:rs.toISOString(),e:re_.toISOString()}];
+
+  // jedna uzavreta zmena — musi existovat VZDY, inak sa v deme nikdy neukaze,
+  // ako vyzera hotova sichta ani tlacidlo Opravit.
+  if(now.getHours()>=9){
+    // denna zmena, skoncila pol hodiny dozadu
+    const outT=new Date(now.getTime()-30*60000);
+    const inT=new Date(outT.getTime()-5*3600000);
+    push('e1', pad(inT.getHours())+':00', pad(outT.getHours())+':00', inT, outT);
+    // 4 prestavky za zmenu — ukazka, ze ich moze byt kolko treba
+    const mk=(offMin,lenMin)=>({s:new Date(inT.getTime()+offMin*60000).toISOString(),
+                                e:new Date(inT.getTime()+(offMin+lenMin)*60000).toISOString()});
+    MEM.shifts[MEM.shifts.length-1].breaks=[mk(50,15),mk(140,30),mk(215,10),mk(265,10)];
+  }else{
+    // rano: zaverecna z noci — pre bar uplne normalne
+    const inT=new Date(now); inT.setDate(inT.getDate()-1); inT.setHours(22,0,0,0);
+    const outT=new Date(now); outT.setHours(2,30,0,0);
+    push('e1','22:00','02:30', inT, outT);
+    // aj nocna zmena ma prestavky — demo musi vyzerat rovnako v ktorukolvek hodinu
+    const mkn=(offMin,lenMin)=>({s:new Date(inT.getTime()+offMin*60000).toISOString(),
+                                 e:new Date(inT.getTime()+(offMin+lenMin)*60000).toISOString()});
+    MEM.shifts[MEM.shifts.length-1].breaks=[mkn(45,15),mkn(120,20),mkn(180,10),mkn(230,10)];
+  }
+
+  // dve caju na prichod
+  push('e4','16:00','23:00',null,null);
+  push('e3','17:00','23:00',null,null);
+
+  // buduci tyzden — naplanovane, bez dochadzky
+  for(let f=1;f<=6;f++){
+    const d=addDays(new Date(),f);
+    const pool=[...MEM.employees].sort(()=>Math.random()-0.5).slice(0,2);
+    pool.forEach((e,i)=>{
+      const [ps,pe]=patterns[i%2];
+      MEM.shifts.push({id:'s'+(++n),employee_id:e.id,date:iso(d),plan_start:ps,plan_end:pe,
+        arrival:null,departure:null});
+    });
+  }
+}
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+const root=document.getElementById('root');
+const modalHost=document.getElementById('modal');
+
+function render(){
+  if(!S.role){ root.innerHTML=viewLogin(); return; }
+  root.innerHTML = `
+    <div id="app">
+      ${viewHeader(S.role==='owner' ? navTabs() : '')}
+      <main>${
+        S.role==='employee' ? viewMine() :
+        S.view==='today' ? viewToday() :
+        S.view==='plan'  ? viewPlan()  :
+        S.view==='cal'   ? viewCal()   : viewPeople()
+      }</main>
+      ${S.role==='owner' ? '' : ''}
+    </div>`;
+}
+
+function langSelect(id){
+  return `<select class="langsel" id="${id}" data-act="langsel" aria-label="${t('language')}">
+    ${LANG_CODES.map(c=>`<option value="${c}" ${c===S.lang?'selected':''}>${T[c].label}</option>`).join('')}
+  </select>`;
+}
+
+/* ---------- login ---------- */
+function viewLogin(){
+  let body;
+  if(S.loginTab==='join')        body=viewJoin();
+  else if(S.loginTab==='owner-signup') body=viewOwnerSignup();
+  else if(S.loginTab==='employee')     body=viewEmployeeLogin();
+  else                                  body=viewOwnerLogin();
+  return `<div class="login">
+    <div>
+      <div class="logo">Ši<b>chta</b></div>
+      <div class="tag">${t('tagline')}</div>
+    </div>
+    ${body}
+    <div class="mode-note">${LIVE?t('liveNote'):t('demoNote')}</div>
+    <div><label>${t('language')}</label>${langSelect('lang-login')}</div>
+  </div>`;
+}
+function viewOwnerLogin(){
+  return `
+    <div class="fg">
+      <div><label>${t('email')}</label>
+        <input id="li-email" type="email" autocomplete="username" inputmode="email" style="padding:15px"></div>
+      <div><label>${t('password')}</label>
+        <input id="li-pass" type="password" autocomplete="current-password" style="padding:15px"></div>
+    </div>
+    <div class="err">${esc(S.loginErr)}</div>
+    <button class="btn" style="padding:18px;font-size:17px" data-act="signin-owner">${t('signin')}</button>
+    ${LIVE ? `<button class="linkish" data-act="ltab" data-v="owner-signup">${t('noAccountYet')}</button>`
+           : `<button class="btn ghost" data-act="demo">${t('demoEnter')}</button>`}
+    <button class="linkish" data-act="ltab" data-v="employee">${t('imEmployee')}</button>`;
+}
+function viewOwnerSignup(){
+  if(S.signupDone){
+    return `<div class="fg"><p class="help" style="text-align:center;font-size:15px;margin:6px 0 0">${t('checkEmailMsg')}</p></div>
+      <button class="btn" style="padding:18px;font-size:17px" data-act="ltab" data-v="owner">${t('backToSignin')}</button>`;
+  }
+  return `
+    <div class="fg">
+      <div><label>${t('email')}</label>
+        <input id="su-email" type="email" autocomplete="username" inputmode="email" style="padding:15px"></div>
+      <div><label>${t('password')}</label>
+        <input id="su-pass" type="password" autocomplete="new-password" style="padding:15px"></div>
+      <div><label>${t('confirmPass')}</label>
+        <input id="su-pass2" type="password" autocomplete="new-password" style="padding:15px"></div>
+    </div>
+    <div class="err">${esc(S.loginErr)}</div>
+    <button class="btn" style="padding:18px;font-size:17px" data-act="signup-owner">${t('signUp')}</button>
+    <button class="linkish" data-act="ltab" data-v="owner">${t('haveAccountYet')}</button>`;
+}
+function viewEmployeeLogin(){
+  return `
+    <div class="fg">
+      <div><label>${t('code')}</label>
+        <input id="li-code" inputmode="numeric" maxlength="4" class="mono"
+               style="font-size:28px;text-align:center;padding:18px;letter-spacing:.3em"></div>
+    </div>
+    <div class="err">${esc(S.loginErr)}</div>
+    <button class="btn" style="padding:18px;font-size:17px" data-act="signin-emp">${t('enter')}</button>
+    <button class="linkish" data-act="ltab" data-v="owner">${t('imOwner')}</button>`;
+}
+/* Novy clovek prisiel cez odkaz s pozyvacim kodom — staci meno, ziadny
+   kod pisat nemusi, ten dostane az po pripojeni. */
+function viewJoin(){
+  return `
+    <div class="fg">
+      <p class="help" style="text-align:center;margin:0 0 4px">${t('joinTitle')}</p>
+      <div><label>${t('joinName')}</label>
+        <input id="j-name" autocomplete="off" style="padding:15px" autofocus></div>
+    </div>
+    <div class="err">${esc(S.loginErr)}</div>
+    <button class="btn" style="padding:18px;font-size:17px" data-act="do-join">${t('joinBtn')}</button>
+    <button class="linkish" data-act="ltab" data-v="employee">${t('imEmployee')}</button>`;
+}
+
+/* ---------- header ---------- */
+function viewHeader(navHtml){
+  const d=new Date();
+  const dn=T[S.lang].dayNames[d.getDay()];
+  return `<header class="bar">
+    <div class="bar-row">
+      <div class="brand">Ši<b>chta</b></div>
+      <div class="bar-tools">
+        ${langSelect('lang-head')}
+        <button class="icon-btn" data-act="signout">${t('signout')}</button>
+      </div>
+    </div>
+    <div class="bar-sub">
+      <div class="date">${dn} ${d.getDate()}. ${d.getMonth()+1}.</div>
+      <div class="clock" id="liveclock">${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}</div>
+    </div>
+    ${navHtml||''}
+  </header>`;
+}
+
+function navTabs(){
+  const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['people',t('tabPeople')]];
+  return `<nav class="tabs">${items.map(([k,l])=>
+    `<button data-act="view" data-v="${k}" aria-pressed="${S.view===k}">${l}</button>`).join('')}</nav>`;
+}
+
+/* Ak niekto zabudol dat odchod, jeho zmena z minulych dni zostava
+   "otvorena" a hodiny mu potichu bezia dalej — na Dnes to inak nebolo
+   vidno vobec, lebo zmena patri svojmu povodnemu dnu. Preto upozornime
+   priamo hore, s tlacidlom Opravit. */
+function staleOpenShifts(){
+  const td=todayISO();
+  return S.shifts.filter(s=>s.arrival && !s.departure && s.date!==td)
+    .sort((a,b)=>a.date.localeCompare(b.date));
+}
+function staleWarning(){
+  const stale=staleOpenShifts();
+  if(!stale.length) return '';
+  const rows=stale.map(s=>{
+    const e=empById(s.employee_id); if(!e)return'';
+    const d=new Date(s.date+'T00:00:00');
+    return `<div class="quick-row">
+      <span class="quick-name">${esc(e.name)} <span class="dim mono" style="font-size:12px">— ${t('unclosedSince')} ${d.getDate()}.${d.getMonth()+1}. ${hhmm(s.arrival)}</span></span>
+      <button class="li-x" data-act="fix" data-id="${s.id}">${t('fix')}</button>
+    </div>`;
+  }).join('');
+  return `<div class="panel" style="margin-bottom:18px;border-color:var(--rust)">
+    <div class="eyebrow" style="margin-bottom:10px;color:var(--rust)">⚠ ${t('unclosedShifts')}</div>
+    ${rows}
+  </div>`;
+}
+/* ---------- DNES ---------- */
+function viewToday(){
+  const list=shiftsOn(todayISO());
+  const now=Date.now();
+  let working=[],hrs=0,cost=0;
+  list.forEach(s=>{
+    const e=empById(s.employee_id); if(!e)return;
+    const h=hoursOf(s,now); hrs+=h; cost+=h*(+e.hourly_rate||0);
+    if(s.arrival&&!s.departure)working.push(e.name.split(' ')[0]);
+  });
+
+  // jednoduchy rezim: jedna veta menami. podrobny: cisla.
+  const head = staleWarning() + (S.detail ? `<div class="ribbon">
+      <div><div class="k">${t('atWork')}</div><div class="v ${working.length?'on':''}">${working.length}</div></div>
+      <div><div class="k">${t('hoursToday')}</div><div class="v" data-live="hours">${num(hrs,1)}</div></div>
+      <div><div class="k">${t('costToday')}</div><div class="v money" data-live="cost">${money(cost)}</div></div>
+    </div>`
+    : `<p class="plainline ${working.length?'':'quiet'}">${
+        working.length
+          ? `${t('atWorkNames')}: <span class="nm">${working.map(esc).join(', ')}</span>`
+          : t('nobodyAtWork')
+      }</p>`);
+
+  const toggle = `<button class="toggle" data-act="detail" aria-pressed="${S.detail}">
+      <span class="switch"></span><span>${t('details')}</span></button>`;
+
+  if(!S.employees.length){
+    return head+`<div class="empty"><p>${t('noPeople')}</p>
+      <button class="btn" data-act="view" data-v="people">${t('addPerson')}</button></div>`;
+  }
+  if(!list.length){
+    // Ziadna naplanovana zmena NEZNAMENA, ze sa nedá dat prichod.
+    // Preto tu musi byt aj zoznam ludi s tlacidlom Prichod teraz.
+    return head+`<p class="plainline quiet">${t('noShiftsToday')}</p>
+      ${unscheduledBlock(list)}
+      <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('planShift')}</button>`;
+  }
+  return head+toggle+`<div class="cards">${list.map(card).join('')}</div>
+    ${unscheduledBlock(list)}
+    <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('addShift')}</button>`;
+}
+
+/* Kto dnes nie je v rozvrhu, ale zaskocil.
+   Nemusis mu najprv planovat zmenu — das mu prichod a zmena sa zalozi sama. */
+function unscheduledBlock(todayList){
+  const busy=new Set(todayList.map(s=>s.employee_id));
+  const free=S.employees.filter(e=>!busy.has(e.id));
+  if(!free.length) return `<p class="help" style="margin-top:16px">${t('allHaveShift')}</p>`;
+  return `<div class="panel" style="margin-top:20px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('notScheduled')}</div>
+    ${free.map(e=>`<div class="quick-row">
+      <span class="quick-name">${esc(e.name)}</span>
+      <button class="quick-btn" data-act="quick-in" data-id="${e.id}">${t('startNow')}</button>
+    </div>`).join('')}
+  </div>`;
+}
+
+function card(s){
+  const e=empById(s.employee_id); if(!e)return'';
+  const br=onBreak(s);
+  const st = s.departure ? 'done' : br ? 'paused' : s.arrival ? 'working' : '';
+  const h=hoursOf(s), bh=breakHoursOf(s);
+  const fresh = S.justStamped===s.id ? 'stamped' : '';
+  const rate = S.detail ? `<div class="rate">${num(+e.hourly_rate||0,2)} ${cur()}/${t('hUnit')}</div>` : '';
+  const showUndo = S.undo && S.undo.id===s.id;
+  const brInfo = brs(s).length ? breakList(s,true) : '';
+  // majitel musi mocт opravit hocico, aj zmenu ktora este nezacala
+  const editBtn = `<button class="li-x" data-act="fix" data-id="${s.id}">${t('fix')}</button>`;
+
+  let body;
+  if(!s.arrival){
+    body = `<div class="status">${t('shiftNotStarted')}</div>
+      <button class="punch-big" data-act="punch-in" data-id="${s.id}">${t('arrive')}</button>
+      <div class="card-foot"><span class="mono" style="font-size:14px;color:var(--bone-dim)">${t('plannedTime')}</span>${editBtn}</div>`;
+  }else if(!s.departure && br){
+    // na prestavke — najpravdepodobnejsi dalsi krok je jej koniec
+    body = `<div class="status pause">${t('onBreakSince')} <b class="${fresh}">${hhmm(br.s)}</b></div>
+      ${brInfo}
+      <button class="punch-big" data-act="break-end" data-id="${s.id}">${t('breakEnd')}</button>
+      <button class="punch-sec" data-act="punch-out" data-id="${s.id}">${t('leave')}</button>
+      <div class="card-foot"><span></span>${editBtn}</div>`;
+  }else if(!s.departure){
+    const live = S.detail ? ` · <b data-tick="${s.id}">${durLong(h)}</b>` : '';
+    body = `<div class="status on">${t('atWorkSince')} <b class="${fresh}">${hhmm(s.arrival)}</b>${live}</div>
+      ${brInfo}
+      <button class="punch-big out" data-act="punch-out" data-id="${s.id}">${t('leave')}</button>
+      <button class="punch-sec" data-act="break-start" data-id="${s.id}">${t('breakStart')}</button>
+      <div class="card-foot"><span></span>${editBtn}</div>`;
+  }else{
+    const money_ = S.detail ? ` · ${money(h*(+e.hourly_rate||0))}` : '';
+    const netNote = bh>0 ? `<div class="status">${t('breaksLbl')}: ${durLong(bh)} · ${t('grossTime')} ${durLong(grossHoursOf(s))}</div>` : '';
+    body = `<div class="status fin">${t('doneLbl')} · <b class="${fresh}">${durLong(h)}</b>${money_}</div>
+      ${netNote}${brInfo}
+      <div class="card-foot">
+        <span class="mono" style="font-size:15px;color:var(--bone-dim)">${hhmm(s.arrival)} – ${hhmm(s.departure)}</span>
+        <button class="li-x" data-act="fix" data-id="${s.id}">${t('fix')}</button>
+      </div>`;
+  }
+
+  const undoRow = showUndo ? `<div class="undo-row"><span>${t('recorded')}</span>
+      <button data-act="undo">${t('undo')}</button></div>` : '';
+
+  return `<div class="card ${st}">
+    <div class="card-top">
+      <div>
+        <div class="name">${esc(e.name)}</div>
+        <div class="plan">${esc(planLabel(s))}</div>
+      </div>
+      ${rate}
+    </div>
+    ${body}${undoRow}
+  </div>`;
+}
+
+/* ---------- ROZVRH ---------- */
+/* Jeden riadok na den: den + kto robi. Detaily az po tuknuti.
+   Predtym tu bolo 27 tlacidiel naraz — z toho 18 krizikov. */
+function weekLabel(){
+  const mine=+S.weekStart, now=+mondayOf(new Date());
+  const wk=7*86400000;
+  if(mine===now)      return t('thisWeek');
+  if(mine===now-wk)   return t('lastWeek');
+  if(mine===now+wk)   return t('nextWeek');
+  const a=S.weekStart, b=addDays(a,6);
+  return `${a.getDate()}. ${a.getMonth()+1}. – ${b.getDate()}. ${b.getMonth()+1}.`;
+}
+
+function viewPlan(){
+  let days='';
+  for(let i=0;i<7;i++){
+    const d=addDays(S.weekStart,i), key=iso(d);
+    const list=shiftsOn(key);
+    const isToday=key===todayISO();
+    const open=S.dayOpen===key;
+
+    // zbalene: len prve mena. ziadne casy, ziadne cisla, ziadne krizky.
+    const who = list.length
+      ? list.map(sh=>{const e=empById(sh.employee_id);return e?esc(e.name.split(' ')[0]):''}).filter(Boolean).join(', ')
+      : `<span class="none">${t('nobody')}</span>`;
+
+    days+=`<div class="day ${isToday?'is-today':''} ${open?'open':''}">
+      <button class="day-row" data-act="openday" data-v="${key}" aria-expanded="${open}">
+        <span class="day-when">${T[S.lang].dows[i]} ${d.getDate()}. ${d.getMonth()+1}.
+          ${isToday?`<span class="chip">${t('todayChip')}</span>`:''}</span>
+        <span class="day-who">${who}</span>
+      </button>
+      ${open?`<div class="day-body">
+        ${list.map(sh=>{
+          const e=empById(sh.employee_id); if(!e)return'';
+          let state;
+          if(!sh.arrival){
+            state=`<span class="tagl plan">${t('planLbl')}</span>
+                   <span class="mono">${esc(planLabel(sh))}</span>`;
+          }else if(!sh.departure){
+            state=`<span class="tagl on">${t('atWorkSince')}</span>
+                   <span class="mono">${hhmm(sh.arrival)}</span>`;
+          }else{
+            state=`<span class="tagl done">${t('workedLbl')}</span>
+                   <span>${durLong(hoursOf(sh))}</span>
+                   <span class="mono dim">${hhmm(sh.arrival)}–${hhmm(sh.departure)}</span>`;
+          }
+          return `<div class="shift-row">
+            <div class="sr-name">${esc(e.name)}</div>
+            <div class="sr-state">${state}</div>
+            <div class="sr-btns">
+              <button class="sr-edit" data-act="fix" data-id="${sh.id}">${t('fix')}</button>
+              <button class="sr-del" data-act="del-shift" data-id="${sh.id}">${t('removeShift')}</button>
+            </div>
+            ${brs(sh).length?`<div class="sr-breaks">${breakList(sh,true)}</div>`:''}
+          </div>`;
+        }).join('')}
+        <button class="addrow" data-act="new-shift" data-date="${key}">+ ${t('addShift')}</button>
+      </div>`:''}
+    </div>`;
+  }
+  return `<div class="nav-week">
+      <button data-act="week" data-v="-1" aria-label="${t('lastWeek')}">‹</button>
+      <span class="lbl">${weekLabel()}</span>
+      <button data-act="week" data-v="1" aria-label="${t('nextWeek')}">›</button>
+    </div>
+    <button class="btn" style="width:100%;margin-bottom:14px" data-act="week-plan">+ ${t('planWeek')}</button>
+    <p class="help">${t('tapDay')}</p>
+    ${days}`;
+}
+
+/* ---------- KALENDÁR ---------- */
+function viewCal(){
+  const c=S.calCursor, y=c.getFullYear(), m=c.getMonth();
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const lead=(first.getDay()+6)%7;
+  const byDay={};
+  S.shifts.forEach(s=>{
+    const d=new Date(s.date+'T00:00:00');
+    if(d.getFullYear()===y&&d.getMonth()===m){
+      byDay[s.date]=(byDay[s.date]||0)+hoursOf(s);
+    }
+  });
+  let cells='';
+  for(let i=0;i<lead;i++)cells+=`<div class="cell mute"></div>`;
+  for(let d=1;d<=last.getDate();d++){
+    const key=`${y}-${pad(m+1)}-${pad(d)}`;
+    const h=byDay[key]||0;
+    cells+=`<button class="cell ${h?'has':''} ${key===todayISO()?'today':''}"
+      data-act="pickday" data-v="${key}" aria-pressed="${S.calPick===key}">
+      <span class="d">${d}</span>${h?`<span class="h">${num(h,1)}</span>`:''}</button>`;
+  }
+
+  // mesačný súhrn
+  const rows=S.employees.map(e=>{
+    let h=0;
+    S.shifts.forEach(s=>{
+      if(s.employee_id!==e.id)return;
+      const dd=new Date(s.date+'T00:00:00');
+      if(dd.getFullYear()===y&&dd.getMonth()===m)h+=hoursOf(s);
+    });
+    return {e,h,c:h*(+e.hourly_rate||0)};
+  }).filter(r=>r.h>0);
+  const sumH=rows.reduce((a,r)=>a+r.h,0), sumC=rows.reduce((a,r)=>a+r.c,0);
+
+  const detail = S.calPick ? dayDetail(S.calPick) : '';
+
+  return `<div class="nav-week">
+      <button data-act="month" data-v="-1">‹</button>
+      <span class="lbl">${T[S.lang].months[m]} ${y}</span>
+      <button data-act="month" data-v="1">›</button>
+    </div>
+    <p class="help">${t('legendHours')}</p>
+    <div class="cal">
+      ${T[S.lang].dows.map(x=>`<div class="dow">${x}</div>`).join('')}
+      ${cells}
+    </div>
+    ${detail}
+    <div class="panel" style="margin-top:18px">
+      <div class="eyebrow" style="margin-bottom:10px">${t('monthTotal')}</div>
+      ${rows.length?`<table>
+        <thead><tr><th>${t('person')}</th><th>${t('hours')}</th><th>€/h</th><th>${t('cost')}</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td>${esc(r.e.name)}</td><td>${num(r.h,1)}</td>
+          <td>${num(+r.e.hourly_rate||0,2)}</td><td>${money(r.c)}</td></tr>`).join('')}
+          <tr class="sum"><td>${t('total')}</td><td>${num(sumH,1)}</td><td></td><td>${money(sumC)}</td></tr>
+        </tbody></table>`:`<div style="color:var(--bone-dim);font-size:14px">${t('noRecord')}</div>`}
+    </div>`;
+}
+
+function dayDetail(key){
+  const list=shiftsOn(key);
+  const d=new Date(key+'T00:00:00');
+  const head=`${T[S.lang].dayNames[d.getDay()]} ${d.getDate()}. ${d.getMonth()+1}. ${d.getFullYear()}`;
+  if(!list.length)return `<div class="panel" style="margin-top:14px">
+    <div class="eyebrow">${head}</div>
+    <div style="color:var(--bone-dim);font-size:14px;margin-top:8px">${t('noRecord')}</div></div>`;
+  let sh=0,sc=0;
+  const body=list.map(s=>{
+    const e=empById(s.employee_id);if(!e)return'';
+    const h=hoursOf(s), c=h*(+e.hourly_rate||0); sh+=h; sc+=c;
+    const bb=breakHoursOf(s);
+    return `<tr><td>${esc(e.name)}</td><td>${hhmm(s.arrival)}</td>
+      <td>${s.departure?hhmm(s.departure):'\u2026'}</td>
+      <td>${bb>0?num(bb,1):'\u2013'}</td><td>${num(h,1)}</td><td>${money(c)}</td>
+      <td style="text-align:right"><button class="sr-edit" data-act="fix" data-id="${s.id}">${t('fix')}</button></td></tr>
+      ${brs(s).length?`<tr class="brk-tr"><td colspan="7">${breakList(s,true)}</td></tr>`:''}`;
+  }).join('');
+  return `<div class="panel" style="margin-top:14px">
+    <div class="eyebrow" style="margin-bottom:10px">${head}</div>
+    <table><thead><tr><th>${t('person')}</th><th>${t('arrived')}</th><th>${t('left')}</th>
+      <th>${t('breaksLbl')}</th><th>${t('hours')}</th><th>${t('cost')}</th><th></th></tr></thead>
+      <tbody>${body}<tr class="sum"><td>${t('total')}</td><td></td><td></td><td></td>
+      <td>${num(sh,1)}</td><td>${money(sc)}</td><td></td></tr></tbody></table></div>`;
+}
+
+/* ---------- ĽUDIA ---------- */
+function loginInfo(e){
+  if(!e.last_login) return `<span class="lg none">${t('neverLoggedIn')}</span>`;
+  const d=new Date(e.last_login), now=new Date();
+  const mins=(now-d)/60000;
+  if(mins<15) return `<span class="lg now">\u25cf ${t('loggedInNow')}</span>`;
+  const sameDay = d.toDateString()===now.toDateString();
+  const when = sameDay ? hhmm(e.last_login)
+    : `${d.getDate()}. ${d.getMonth()+1}. ${hhmm(e.last_login)}`;
+  return `<span class="lg">${t('lastLogin')}: ${when}</span>`;
+}
+
+function viewPeople(){
+  const mode=`<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('whoRecords')}</div>
+    <div class="presets" style="grid-template-columns:1fr 1fr">
+      <button data-act="mode" data-v="owner" aria-pressed="${S.punchMode==='owner'}">${t('modeOwner')}</button>
+      <button data-act="mode" data-v="self" aria-pressed="${S.punchMode==='self'}">${t('modeSelf')}</button>
+    </div>
+    <p class="help" style="margin:10px 0 0">${t('modeHint')}</p>
+  </div>`;
+  const link = S.inviteCode
+    ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
+  const invite = `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('addPerson')}</div>
+    <p class="help" style="margin:0 0 10px">${t('inviteHint')}</p>
+    <div class="invite-row">
+      <input id="invite-link" class="mono" readonly value="${esc(link)}" style="padding:12px">
+      <button class="btn ghost" data-act="copy-invite">${t('copyLink')}</button>
+    </div>
+    <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
+  </div>`;
+  return mode+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
+    <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
+    ${S.employees.length?S.employees.map(e=>`
+      <div class="person">
+        <div>
+          <div class="pname">${esc(e.name)}</div>
+          <div class="pcode">${t('codeLbl')}: <b>${esc(e.access_code||'\u2014')}</b></div>
+          <div class="pcode">${loginInfo(e)}</div>
+        </div>
+        <div class="rate-edit">
+          <input type="number" step="0.10" min="0" value="${(+e.hourly_rate||0).toFixed(2)}"
+            data-act="rate" data-id="${e.id}" aria-label="${t('rate')}">
+          <span>${cur()}/${t('hUnit')}</span>
+        </div>
+        <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
+      </div>`).join(''):`<div class="empty"><p>${t('noPeople')}</p>
+        <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}`;
+}
+
+/* ---------- zamestnanec: moje zmeny ---------- */
+/* Karta pre zamestnanca na dnesnu zmenu. Ziadne mzdy, ziadne mazanie —
+   len jeho prichod, prestavka a odchod. Zobrazi sa len ked to vlastnik povolil. */
+function myCard(sh){
+  const br=onBreak(sh);
+  const h=hoursOf(sh), bh=breakHoursOf(sh);
+  const st = sh.departure ? 'done' : br ? 'paused' : sh.arrival ? 'working' : '';
+  const fresh = S.justStamped===sh.id ? 'stamped' : '';
+  let body;
+  if(!sh.arrival){
+    body=`<div class="status">${t('shiftNotStarted')}</div>
+      <button class="punch-big" data-act="my-in" data-id="${sh.id}">${t('arrive')}</button>`;
+  }else if(!sh.departure && br){
+    body=`<div class="status pause">${t('onBreakSince')} <b class="${fresh}">${hhmm(br.s)}</b></div>
+      <button class="punch-big" data-act="my-break-end" data-id="${sh.id}">${t('breakEnd')}</button>
+      <button class="punch-sec" data-act="my-out" data-id="${sh.id}">${t('leave')}</button>`;
+  }else if(!sh.departure){
+    body=`<div class="status on">${t('atWorkSince')} <b class="${fresh}">${hhmm(sh.arrival)}</b>
+      \u00b7 <b data-tick="${sh.id}">${durLong(h)}</b></div>
+      <button class="punch-big out" data-act="my-out" data-id="${sh.id}">${t('leave')}</button>
+      <button class="punch-sec" data-act="my-break-start" data-id="${sh.id}">${t('breakStart')}</button>`;
+  }else{
+    body=`<div class="status fin">${t('doneLbl')} \u00b7 <b class="${fresh}">${durLong(h)}</b></div>`;
+  }
+  return `<div class="card ${st}">
+    <div class="card-top"><div>
+      <div class="name">${t('todayLbl')}</div>
+      <div class="plan">${esc(planLabel(sh))}</div>
+    </div></div>
+    ${body}
+    ${brs(sh).length?breakList(sh,true):''}
+  </div>`;
+}
+
+function viewMine(){
+  const me=S.me;
+  const now=new Date(), y=now.getFullYear(), m=now.getMonth();
+  const all=S.shifts.filter(s=>s.employee_id===me.id);
+  const mine=all
+    .filter(s=>{const d=new Date(s.date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()===m})
+    .sort((a,b)=>b.date.localeCompare(a.date));
+  const h=mine.reduce((a,s)=>a+hoursOf(s),0);
+  const bh=mine.reduce((a,s)=>a+breakHoursOf(s),0);
+
+  // dnesne zmeny — s tlacidlami, ak to vlastnik povolil
+  const today=all.filter(s=>s.date===todayISO())
+    .sort((a,b)=>(a.plan_start||'').localeCompare(b.plan_start||''));
+  let todayBlock;
+  if(S.punchMode!=='self'){
+    todayBlock=`<p class="plainline quiet">${t('readOnlyNote')}</p>`;
+  }else if(today.length){
+    todayBlock=`<div class="cards" style="margin-bottom:20px">${today.map(myCard).join('')}</div>`;
+  }else{
+    // zmenu naplanovanu nema, ale prisiel — nech si moze dat prichod
+    todayBlock=`<div class="card" style="margin-bottom:20px">
+      <div class="card-top"><div><div class="name">${t('todayLbl')}</div>
+        <div class="plan">${t('unplanned')}</div></div></div>
+      <div class="status">${t('shiftNotStarted')}</div>
+      <button class="punch-big" data-act="my-start">${t('arrive')}</button>
+    </div>`;
+  }
+
+  return `<div class="ribbon">
+      <div><div class="k">${t('myHours')}</div><div class="v">${num(h,1)}</div></div>
+      <div><div class="k">${cur()}/${t('hUnit')}</div><div class="v">${num(+me.hourly_rate||0,2)}</div></div>
+      <div><div class="k">${t('gross')}</div><div class="v money">${money(h*(+me.hourly_rate||0))}</div></div>
+    </div>
+    ${todayBlock}
+    ${bh>0?`<p class="plainline quiet">${t('breakTotal')}: ${durLong(bh)}</p>`:''}
+    <div class="sec-head"><h2>${t('myShifts')} \u00b7 ${T[S.lang].months[m]}</h2></div>
+    ${mine.length?mine.map(s=>{
+      const d=new Date(s.date+'T00:00:00');
+      const day=`${T[S.lang].dows[(d.getDay()+6)%7]} ${d.getDate()}. ${d.getMonth()+1}.`;
+      let right;
+      if(!s.arrival){
+        right=`<span class="tagl plan">${t('planLbl')}</span>
+               <span class="mono">${esc(planLabel(s))}</span>`;
+      }else if(!s.departure){
+        right=`<span class="tagl on">${t('atWorkSince')}</span>
+               <span class="mono">${hhmm(s.arrival)}</span>`;
+      }else{
+        const bb=breakHoursOf(s);
+        right=`<span>${durLong(hoursOf(s))}</span>
+               <span class="mono dim">${hhmm(s.arrival)}\u2013${hhmm(s.departure)}</span>
+               ${bb>0?`<span class="dim">${t('breaksLbl')} ${durLong(bb)}</span>`:''}`;
+      }
+      return `<div class="shift-row" style="grid-template-columns:1fr">
+        <div class="sr-name">${day}</div>
+        <div class="sr-state">${right}</div>
+      </div>`;
+    }).join(''):`<div class="empty">${t('noShifts')}</div>`}`;
+}
+
+/* ============================================================
+   MODALS
+   ============================================================ */
+function openShiftModal(date){
+  if(!S.employees.length){toast(t('noPeople'));return;}
+  openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('planShift')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <div class="fg">
+      <div><label>${t('person')}</label><select id="m-emp" style="padding:14px">
+        ${S.employees.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}
+      </select></div>
+      <div><label>${t('date')}</label><input id="m-date" type="date" value="${date}" style="padding:14px"></div>
+      <div><label>${t('whichShift')}</label>
+        <div class="presets" id="m-presets">
+          <button data-act="preset" data-f="08:00" data-t="16:00">${t('morningS')}<small>8:00–16:00</small></button>
+          <button data-act="preset" data-f="12:00" data-t="20:00">${t('afternoonS')}<small>12:00–20:00</small></button>
+          <button data-act="preset" data-f="16:00" data-t="23:00">${t('eveningS')}<small>16:00–23:00</small></button>
+          <button data-act="preset" data-f="" data-t="">${t('otherTime')}<small>&nbsp;</small></button>
+        </div>
+      </div>
+      <div class="two hide" id="m-custom">
+        <div><label>${t('from')}</label><input id="m-from" type="time" value="16:00" style="padding:14px"></div>
+        <div><label>${t('to')}</label><input id="m-to" type="time" value="23:00" style="padding:14px"></div>
+      </div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn" data-act="save-shift">${t('save')}</button>
+    </div>
+  </div></div>`);
+  // vecerna ako predvolena
+  const def=modalHost.querySelector('[data-f="16:00"]');
+  if(def)def.setAttribute('aria-pressed','true');
+}
+
+function breakRowHtml(id,b){
+  b=b||{};
+  return `<div class="brk-row">
+      <input type="time" class="brk-s" value="${b.s?hhmm(b.s):''}" aria-label="${t('from')}">
+      <span class="brk-dash">\u2013</span>
+      <input type="time" class="brk-e" value="${b.e?hhmm(b.e):''}" aria-label="${t('to')}">
+      <button class="brk-del" data-act="brk-del" data-id="${id}"
+        aria-label="${t('remove')}">\u2715</button>
+    </div>`;
+}
+
+/* Planovanie na cely tyzden naraz. Predtym sa musela kazda zmena zadavat
+   zvlast — pri 4 ludoch a 6 dnoch to bolo 24 otvoreni okna. */
+function openWeekModal(){
+  if(!S.employees.length){toast(t('noPeople'));return;}
+  const ws=S.weekStart, we=addDays(ws,6);
+  const label=`${ws.getDate()}. ${ws.getMonth()+1}. \u2013 ${we.getDate()}. ${we.getMonth()+1}.`;
+  openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('planWeek')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">\u2715</button></div>
+    <p class="help">${label}</p>
+    <div class="fg">
+      <div><label>${t('person')}</label><select id="w-emp" style="padding:14px">
+        ${S.employees.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}
+      </select></div>
+      <div><label>${t('whichShift')}</label>
+        <div class="presets" id="w-presets">
+          <button data-act="w-preset" data-f="08:00" data-t="16:00">${t('morningS')}<small>8:00\u201316:00</small></button>
+          <button data-act="w-preset" data-f="12:00" data-t="20:00">${t('afternoonS')}<small>12:00\u201320:00</small></button>
+          <button data-act="w-preset" data-f="16:00" data-t="23:00" aria-pressed="true">${t('eveningS')}<small>16:00\u201323:00</small></button>
+          <button data-act="w-preset" data-f="" data-t="">${t('otherTime')}<small>&nbsp;</small></button>
+        </div>
+      </div>
+      <div class="two hide" id="w-custom">
+        <div><label>${t('from')}</label><input id="w-from" type="time" value="16:00" style="padding:14px"></div>
+        <div><label>${t('to')}</label><input id="w-to" type="time" value="23:00" style="padding:14px"></div>
+      </div>
+      <div><label>${t('pickDays')}</label>
+        <div class="daypick" id="w-days">
+          ${T[S.lang].dows.map((d,i)=>{
+            const dd=addDays(ws,i);
+            return `<button data-act="w-day" data-i="${i}" aria-pressed="false">
+              <span class="dp-d">${d}</span><span class="dp-n">${dd.getDate()}.</span></button>`;
+          }).join('')}
+        </div>
+      </div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn" data-act="save-week">${t('save')}</button>
+    </div>
+  </div></div>`);
+}
+
+function openFixModal(id){
+  const sh=S.shifts.find(x=>x.id===id); if(!sh)return;
+  const e=empById(sh.employee_id);
+  const aVal=sh.arrival?hhmm(sh.arrival):'';
+  const dVal=sh.departure?hhmm(sh.departure):'';
+  const list=brs(sh);
+  const rows = list.length ? list.map(b=>breakRowHtml(id,b)).join('')
+    : `<div class="help" style="margin:0">${t('noBreaks')}</div>`;
+
+  openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('fix')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">\u2715</button></div>
+    <p class="help">${esc(sh.date)}<br>${t('fixHelp')}</p>
+    <div class="fg">
+      <div><label>${t('changePerson')}</label>
+        <select id="f-emp" style="padding:14px">
+          ${S.employees.map(x=>`<option value="${x.id}" ${x.id===sh.employee_id?'selected':''}>${esc(x.name)}</option>`).join('')}
+        </select></div>
+      <div>
+        <label>${t('plannedTime')}</label>
+        <div class="two">
+          <input id="f-ps" type="time" value="${esc(hm(sh.plan_start)==='\u2014'?'':hm(sh.plan_start))}" style="padding:14px">
+          <input id="f-pe" type="time" value="${esc(hm(sh.plan_end)==='\u2014'?'':hm(sh.plan_end))}" style="padding:14px">
+        </div>
+      </div>
+      <div class="two">
+        <div><label>${t('arrived')}</label><input id="f-arr" type="time" value="${aVal}" style="padding:14px"></div>
+        <div><label>${t('left')}</label><input id="f-dep" type="time" value="${dVal}" style="padding:14px"></div>
+      </div>
+      <div>
+        <label>${t('breaksLbl')}</label>
+        <div id="f-breaks">${rows}</div>
+        <button class="addrow" data-act="brk-add" data-id="${id}">+ ${t('addBreak')}</button>
+      </div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn" data-act="save-fix" data-id="${id}">${t('save')}</button>
+    </div>
+    <button class="linkish" data-act="clear-dep" data-id="${id}"
+      style="display:block;width:100%;text-align:center">${t('clearDeparture')}</button>
+  </div></div>`);
+}
+
+/* ---- skladanie casu z "HH:MM" na skutocny okamih ----
+   Zmena v bare casto ide cez polnoc (22:00–02:30). Keby sme kazdy cas
+   len prilepili na datum zmeny, prestavka o 01:00 by skoncila 24 hodin
+   pred odchodom a hodiny by vysli negativne. Preto:
+   prichod urcuje den, a kazdy dalsi cas, ktory by bol pred prichodom,
+   posunieme na nasledujuci den. */
+function mkAt(baseISO, hhmmStr){
+  if(!hhmmStr)return null;
+  const base=new Date(baseISO);
+  const d=new Date(base.getFullYear(),base.getMonth(),base.getDate(),
+                   +hhmmStr.slice(0,2), +hhmmStr.slice(3,5), 0, 0);
+  return d;
+}
+function mkAfter(baseISO, hhmmStr){
+  const d=mkAt(baseISO,hhmmStr);
+  if(!d)return null;
+  if(d<new Date(baseISO)) d.setDate(d.getDate()+1);   // je to uz po polnoci
+  return d.toISOString();
+}
+/* precita prestavky z okna a vrati ich ako pole {s,e}, ukotvene na prichod */
+function readBreaksFromSheet(anchorISO){
+  const out=[];
+  document.querySelectorAll('#f-breaks .brk-row').forEach(r=>{
+    const sv=r.querySelector('.brk-s').value, ev=r.querySelector('.brk-e').value;
+    if(!sv)return;                       // bez zaciatku prestavku nezapisujeme
+    const st=mkAfter(anchorISO,sv);
+    out.push({s:st, e:ev?mkAfter(st,ev):null});
+  });
+  return out;
+}
+
+function openPersonModal(){
+  openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('addPerson')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <div class="fg">
+      <div><label>${t('name')}</label><input id="p-name" autocomplete="off"></div>
+      <div><label>${t('rate')} (€/h)</label><input id="p-rate" type="number" step="0.10" min="0" value="6.50" class="mono"></div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn" data-act="save-person">${t('save')}</button>
+    </div>
+  </div></div>`);
+}
+function closeModal(){
+  modalHost.innerHTML='';
+  document.body.classList.remove('locked');
+}
+function openModal(html){
+  modalHost.innerHTML=html;
+  document.body.classList.add('locked');
+  // fokus do okna, aby Escape a citacky fungovali
+  const f=modalHost.querySelector('input,select,button');
+  if(f&&f.focus)try{f.focus({preventScroll:true})}catch(e){}
+}
+/* Escape zatvori okno */
+document.addEventListener('keydown',ev=>{
+  if(ev.key==='Escape'&&modalHost.innerHTML){ ev.preventDefault(); closeModal(); }
+});
+
+/* ============================================================
+   EVENTS
+   ============================================================ */
+document.addEventListener('click',async ev=>{
+  const el=ev.target.closest('[data-act]'); if(!el)return;
+  const a=el.dataset.act;
+
+  if(a==='scrim'&&ev.target!==el)return;
+
+  switch(a){
+    case 'lang': setLang(el.dataset.v); render(); break;
+    case 'ltab': S.loginTab=el.dataset.v; S.loginErr=''; S.signupDone=false; render(); break;
+    case 'view': S.view=el.dataset.v; render(); break;
+    case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
+    case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
+                  S.calPick=null; render(); break;
+    case 'pickday': S.calPick = S.calPick===el.dataset.v ? null : el.dataset.v; render(); break;
+    case 'detail': S.detail=!S.detail; render(); break;
+    case 'mode': {
+      const v=el.dataset.v;
+      if(v===S.punchMode)break;
+      S.punchMode=v;
+      try{ await DB.savePunchMode(v); toast(t('saved')); }catch(e){ dbErr(e); }
+      render(); break;
+    }
+    case 'openday': S.dayOpen = S.dayOpen===el.dataset.v ? null : el.dataset.v; render(); break;
+
+    case 'preset': {
+      const f=el.dataset.f, to=el.dataset.t;
+      modalHost.querySelectorAll('[data-act=preset]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      el.setAttribute('aria-pressed','true');
+      const custom=document.getElementById('m-custom');
+      if(!f){ custom.classList.remove('hide'); }
+      else{
+        custom.classList.add('hide');
+        document.getElementById('m-from').value=f;
+        document.getElementById('m-to').value=to;
+      }
+      break;
+    }
+
+    case 'undo': {
+      if(!S.undo)break;
+      const {id,field}=S.undo;
+      await DB.updateShift(id,{[field]:null});
+      const sh=S.shifts.find(x=>x.id===id); if(sh)sh[field]=null;
+      S.undo=null; render(); break;
+    }
+
+    case 'break-start': {
+      const id=el.dataset.id;
+      const sh=S.shifts.find(x=>x.id===id); if(!sh||onBreak(sh))break;
+      const list=brs(sh).concat([{s:new Date().toISOString(),e:null}]);
+      await DB.updateShift(id,{breaks:list});
+      sh.breaks=list; S.justStamped=id; render(); S.justStamped=null; break;
+    }
+    case 'break-end': {
+      const id=el.dataset.id;
+      const sh=S.shifts.find(x=>x.id===id); const b=sh&&onBreak(sh); if(!b)break;
+      const list=brs(sh).slice(); list[list.length-1]={...b,e:new Date().toISOString()};
+      await DB.updateShift(id,{breaks:list});
+      sh.breaks=list; S.justStamped=id; render(); S.justStamped=null; break;
+    }
+
+    /* Zamestnanec si zapisuje sam. Vzdy cez DB.empPunch — o tom,
+       ci to smie, rozhoduje databaza, nie tento kod. */
+    case 'my-start': {
+      try{
+        const sh=await DB.empStart(S.myCode);
+        if(sh){ S.shifts.push(sh); S.justStamped=sh.id; }
+        render(); S.justStamped=null;
+      }catch(e){ toast(t('readOnlyNote')); }
+      break;
+    }
+    case 'my-in': case 'my-out': case 'my-break-start': case 'my-break-end': {
+      const map={'my-in':'in','my-out':'out','my-break-start':'break_start','my-break-end':'break_end'};
+      const id=el.dataset.id;
+      try{
+        const upd=await DB.empPunch(S.myCode, id, map[a]);
+        if(upd){
+          const i=S.shifts.findIndex(x=>x.id===id);
+          if(i>=0) S.shifts[i]={...S.shifts[i], ...upd};
+        }
+        S.justStamped=id; render(); S.justStamped=null;
+      }catch(e){ toast(t('readOnlyNote')); }
+      break;
+    }
+
+    case 'fix': openFixModal(el.dataset.id); break;
+    /* Riadky prestavok menime priamo v okne, BEZ prekreslenia.
+       Predtym sa okno prekreslilo a zmazalo ostatne neulozene upravy
+       (osobu, plan, prichod) — to bola chyba. */
+    case 'brk-add': {
+      const host=document.getElementById('f-breaks'); if(!host)break;
+      const help=host.querySelector('.help'); if(help)help.remove();
+      host.insertAdjacentHTML('beforeend', breakRowHtml(el.dataset.id));
+      const last=host.querySelector('.brk-row:last-child .brk-s');
+      if(last&&last.focus)try{last.focus({preventScroll:true})}catch(e){}
+      break;
+    }
+    case 'brk-del': {
+      const row=el.closest('.brk-row'); if(!row)break;
+      const host=row.parentElement;
+      row.remove();
+      if(host&&!host.querySelector('.brk-row')){
+        host.innerHTML=`<div class="help" style="margin:0">${t('noBreaks')}</div>`;
+      }
+      break;
+    }
+    case 'save-fix': {
+      const id=el.dataset.id;
+      const sh=S.shifts.find(x=>x.id===id); if(!sh)break;
+      const av=document.getElementById('f-arr').value;
+      const dv=document.getElementById('f-dep').value;
+      // den prichodu: ak uz prichod existuje, drzime jeho den (kvoli nocnym zmenam)
+      const newEmp=(document.getElementById('f-emp')||{}).value || sh.employee_id;
+      const ps=(document.getElementById('f-ps')||{}).value || null;
+      const pe=(document.getElementById('f-pe')||{}).value || null;
+      const anchor = sh.arrival || (sh.date+'T00:00:00');
+      const aD = mkAt(anchor, av);
+      const a  = aD ? aD.toISOString() : null;
+      const dp = a ? mkAfter(a, dv) : null;
+      if(a&&dp&&new Date(dp)<=new Date(a)){ toast(t('badTime')); return; }
+      // 16:00 -> 09:00 je platna nocna zmena, ale 17 hodin je skoro vzdy preklep
+      if(a&&dp&&(new Date(dp)-new Date(a))/3600000>16){ toast(t('tooLong')); return; }
+      const bl = a ? readBreaksFromSheet(a) : [];
+      // prestavka musi lezat v zmene, inak by vysli negativne hodiny.
+      // Zly riadok oznacime cerveno, aby uzivatel videl KTORY to je —
+      // samotna hlaska mu nepovie, kde hladat.
+      const rowsEl=document.querySelectorAll('#f-breaks .brk-row');
+      rowsEl.forEach(r=>r.classList.remove('bad'));
+      let badAt=-1;
+      bl.forEach((b,i)=>{
+        if(badAt>=0)return;
+        if(b.e&&new Date(b.e)<=new Date(b.s)) badAt=i;
+        else if(a&&new Date(b.s)<new Date(a)) badAt=i;
+        else if(dp&&b.e&&new Date(b.e)>new Date(dp)) badAt=i;
+      });
+      if(badAt>=0){
+        const r=rowsEl[badAt];
+        if(r){ r.classList.add('bad'); r.scrollIntoView({block:'center'}); }
+        toast(t('badBreak')); return;
+      }
+      try{
+        await DB.updateShift(id,{employee_id:newEmp,plan_start:ps,plan_end:pe,
+                                arrival:a,departure:dp,breaks:bl});
+        sh.employee_id=newEmp; sh.plan_start=ps; sh.plan_end=pe;
+        sh.arrival=a; sh.departure=dp; sh.breaks=bl;
+        closeModal(); toast(t('saved')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'clear-dep': {
+      const id=el.dataset.id;
+      await DB.updateShift(id,{departure:null});
+      const sh=S.shifts.find(x=>x.id===id); if(sh)sh.departure=null;
+      closeModal(); toast(t('saved')); render(); break;
+    }
+
+    case 'demo': {
+      seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
+      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null;
+      S.role='owner'; S.view='today'; render(); break;
+    }
+
+    case 'signin-owner': {
+      const email=(document.getElementById('li-email').value||'').trim();
+      const pass=document.getElementById('li-pass').value||'';
+      if(!LIVE){ S.loginErr=t('demoNote'); render(); return; }
+      try{
+        await DB.signIn(email,pass);
+        S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; }catch(e){}
+        S.role='owner'; S.loginErr=''; render();
+      }catch(e){ S.loginErr=t('badLogin'); render(); }
+      break;
+    }
+    case 'signup-owner': {
+      const email=(document.getElementById('su-email').value||'').trim();
+      const p1=document.getElementById('su-pass').value||'';
+      const p2=document.getElementById('su-pass2').value||'';
+      if(!LIVE){ S.loginErr=t('demoNote'); render(); return; }
+      if(!email){ S.loginErr=t('badLogin'); render(); return; }
+      if(p1.length<6){ S.loginErr=t('passTooShort'); render(); return; }
+      if(p1!==p2){ S.loginErr=t('passMismatch'); render(); return; }
+      el.disabled=true;
+      try{
+        await DB.signUp(email,p1);
+        S.signupDone=true; S.loginErr=''; render();
+      }catch(err){
+        S.loginErr = (err&&err.message) || t('badLogin');
+        render();
+      }
+      break;
+    }
+    case 'do-join': {
+      const name=(document.getElementById('j-name').value||'').trim();
+      if(!name){ S.loginErr=t('nameRequired'); render(); return; }
+      el.disabled=true;
+      try{
+        const res=await DB.selfRegister(S.joinCode, name);
+        if(!res || !res.access_code){ S.loginErr=t('joinBadCode'); render(); return; }
+        let me=null;
+        try{ me=await DB.employeeByCode(res.access_code); }catch(e2){}
+        if(!me) me={id:res.id, name:res.name, hourly_rate:0, access_code:res.access_code};
+        try{ S.shifts=await DB.employeeShifts(res.access_code); }catch(e2){ S.shifts=[]; }
+        S.employees=[me]; S.me=me; S.myCode=res.access_code;
+        S.role='employee'; S.loginErr='';
+        clearJoinFromUrl();
+        render();
+      }catch(err){
+        S.loginErr=t('joinBadCode'); render();
+      }
+      break;
+    }
+    case 'copy-invite': {
+      const inp=document.getElementById('invite-link');
+      const val = inp ? inp.value : '';
+      if(!val) break;
+      try{
+        await navigator.clipboard.writeText(val);
+        toast(t('linkCopied'));
+      }catch(e){
+        try{ inp.select(); document.execCommand('copy'); toast(t('linkCopied')); }catch(e2){}
+      }
+      break;
+    }
+    case 'regen-invite': {
+      if(!confirm(t('regenConfirm')))break;
+      try{
+        const code=await DB.regenerateInvite();
+        S.inviteCode=code; toast(t('saved')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'signin-emp': {
+      const code=(document.getElementById('li-code').value||'').trim();
+      let me=null;
+      try{ me=await DB.employeeByCode(code); }catch(e){ console.warn(e); }
+      if(!me){ S.loginErr=t('badCode'); render(); return; }
+      try{ S.shifts=await DB.employeeShifts(code); }catch(e){ S.shifts=[]; }
+      if(!LIVE){ try{ S.punchMode=(await DB.loadSettings()).punch_mode||'owner'; }catch(e){} }
+      S.employees=[me]; S.me=me; S.myCode=code;
+      S.role='employee'; S.loginErr=''; render(); break;
+    }
+    case 'signout': await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; render(); break;
+
+    case 'punch-in': {
+      const id=el.dataset.id;
+      const now=new Date().toISOString();
+      try{
+        await DB.updateShift(id,{arrival:now});
+        S.shifts.find(x=>x.id===id).arrival=now;
+        S.justStamped=id; setUndo(id,'arrival'); render(); S.justStamped=null;
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'punch-out': {
+      const id=el.dataset.id;
+      const now=new Date().toISOString();
+      const sh=S.shifts.find(x=>x.id===id);
+      // ak je prave na prestavke, uzavri ju tym istym casom
+      const patch={departure:now};
+      if(onBreak(sh)){
+        const list=brs(sh).slice();
+        list[list.length-1]={...list[list.length-1],e:now};
+        patch.breaks=list; sh.breaks=list;
+      }
+      await DB.updateShift(id,patch);
+      sh.departure=now;
+      S.justStamped=id; setUndo(id,'departure'); render(); S.justStamped=null; break;
+    }
+    /* prichod bez planu — zmena sa zalozi az teraz */
+    case 'quick-in': {
+      const emp=el.dataset.id;
+      const now=new Date().toISOString();
+      const row={employee_id:emp,date:todayISO(),plan_start:null,plan_end:null,
+                 arrival:now,departure:null,breaks:[]};
+      try{
+        const sh=await DB.addShift(row);
+        S.shifts.push(sh); S.justStamped=sh.id; setUndo(sh.id,'arrival');
+        render(); S.justStamped=null;
+      }catch(err){ dbErr(err); }
+      break;
+    }
+
+    case 'week-plan': openWeekModal(); break;
+
+    case 'w-preset': {
+      const f=el.dataset.f, to=el.dataset.t;
+      modalHost.querySelectorAll('[data-act=w-preset]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      el.setAttribute('aria-pressed','true');
+      const custom=document.getElementById('w-custom');
+      if(!f){ custom.classList.remove('hide'); }
+      else{
+        custom.classList.add('hide');
+        document.getElementById('w-from').value=f;
+        document.getElementById('w-to').value=to;
+      }
+      break;
+    }
+    case 'w-day': {
+      const on=el.getAttribute('aria-pressed')==='true';
+      el.setAttribute('aria-pressed', on?'false':'true');
+      break;
+    }
+    case 'save-week': {
+      const emp=document.getElementById('w-emp').value;
+      const f=document.getElementById('w-from').value;
+      const to=document.getElementById('w-to').value;
+      const picked=[...document.querySelectorAll('[data-act=w-day]')]
+        .filter(b=>b.getAttribute('aria-pressed')==='true').map(b=>+b.dataset.i);
+      if(!picked.length){ toast(t('noDays')); return; }
+      let made=0;
+      for(const i of picked){
+        const key=iso(addDays(S.weekStart,i));
+        // ak uz v ten den zmenu ma, nezdvojujeme ju
+        if(S.shifts.some(x=>x.employee_id===emp && x.date===key)) continue;
+        try{
+          const sh=await DB.addShift({employee_id:emp,date:key,plan_start:f,plan_end:to,
+                                      arrival:null,departure:null,breaks:[]});
+          S.shifts.push(sh); made++;
+        }catch(err){ dbErr(err); closeModal(); render(); return; }
+      }
+      closeModal(); toast(t('createdN')+made); render(); break;
+    }
+
+    case 'new-shift': openShiftModal(el.dataset.date||todayISO()); break;
+    case 'save-shift': {
+      const emp=document.getElementById('m-emp').value;
+      const date=document.getElementById('m-date').value;
+      const f=document.getElementById('m-from').value;
+      const to=document.getElementById('m-to').value;
+      if(!emp){toast(t('pickPerson'));return;}
+      const row={employee_id:emp,date,plan_start:f,plan_end:to,arrival:null,departure:null,breaks:[]};
+      try{
+        const s=await DB.addShift(row);
+        S.shifts.push(s); S.dayOpen=date; closeModal(); toast(t('added')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'del-shift': {
+      const id=el.dataset.id;
+      try{
+        await DB.removeShift(id);
+        S.shifts=S.shifts.filter(x=>x.id!==id); toast(t('removed')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'new-person': openPersonModal(); break;
+    case 'save-person': {
+      const name=(document.getElementById('p-name').value||'').trim();
+      const rate=parseFloat(document.getElementById('p-rate').value)||0;
+      if(!name){toast(t('nameRequired'));return;}
+      try{
+        const e=await DB.addEmployee({name,hourly_rate:rate,access_code:makeCode()});
+        S.employees.push(e); S.employees.sort((a,b)=>a.name.localeCompare(b.name));
+        closeModal(); toast(t('added')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'del-person': {
+      if(!confirm(t('confirmRemovePerson')))return;
+      const id=el.dataset.id;
+      try{
+        await DB.removeEmployee(id);
+        S.employees=S.employees.filter(x=>x.id!==id);
+        S.shifts=S.shifts.filter(x=>x.employee_id!==id);
+        toast(t('removed')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'close': closeModal(); break;
+    case 'scrim': closeModal(); break;   // tap na tmavu plochu zatvori
+  }
+});
+
+/* rate edit */
+document.addEventListener('change',async ev=>{
+  const el=ev.target;
+  if(el.dataset&&el.dataset.act==='langsel'){ setLang(el.value); render(); return; }
+  if(el.dataset&&el.dataset.act==='rate'){
+    const v=parseFloat(el.value)||0;
+    try{
+      await DB.updateEmployee(el.dataset.id,{hourly_rate:v});
+      const e=empById(el.dataset.id); if(e)e.hourly_rate=v;
+      toast(t('saved'));
+    }catch(err){ dbErr(err); }
+  }
+});
+
+/* ---------- live tick: hodiny bežiacich zmien + hodiny v hlavičke ---------- */
+setInterval(()=>{
+  const c=document.getElementById('liveclock');
+  if(c){const d=new Date();c.textContent=pad(d.getHours())+':'+pad(d.getMinutes())+':'+pad(d.getSeconds());}
+  document.querySelectorAll('[data-tick]').forEach(node=>{
+    const s=S.shifts.find(x=>x.id===node.dataset.tick);
+    if(s)node.textContent=durLong(hoursOf(s));
+  });
+  if(S.role==='owner'&&S.view==='today'){
+    const now=Date.now(); let hrs=0,cost=0;
+    shiftsOn(todayISO()).forEach(s=>{
+      const e=empById(s.employee_id); if(!e)return;
+      const h=hoursOf(s,now); hrs+=h; cost+=h*(+e.hourly_rate||0);
+    });
+    const hn=document.querySelector('[data-live=hours]'), cn=document.querySelector('[data-live=cost]');
+    if(hn)hn.textContent=num(hrs,1);
+    if(cn)cn.textContent=money(cost);
+  }
+},1000);
+
+/* ---------- boot ---------- */
+(async function boot(){
+  setLang(langFromUrl());
+  const jc=joinCodeFromUrl();
+  if(jc){ S.joinCode=jc; S.loginTab='join'; }
+  if(LIVE){
+    try{
+      const ses=await DB.session();
+      if(ses){
+        S.employees=await DB.loadEmployees();
+        S.shifts=await DB.loadShifts();
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; }catch(e){}
+        S.role='owner';
+      }
+    }catch(e){console.warn(e)}
+  }
+  render();
+  /* Ked sa telefon prebudi/appka vrati na popredie, over ci este plati
+     prihlasenie — predtym prvy tap po dlhsej pauze proste tichoe zlyhal. */
+  document.addEventListener('visibilitychange', async ()=>{
+    if(document.visibilityState==='visible' && LIVE && sb && S.role==='owner'){
+      try{
+        const {data}=await sb.auth.getSession();
+        if(!data.session){ S.role=null; S.loginErr=''; render(); }
+      }catch(e){}
+    }
+  });
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  }
+})();
+</script>
+</body>
+</html>
