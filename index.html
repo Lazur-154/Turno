@@ -323,6 +323,10 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .invite-row input{flex:1;min-width:0;font-size:13px}
 .invite-row .btn{white-space:nowrap;min-height:44px}
 .install-row{margin-top:14px;text-align:center}
+.plan-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.plan-tier-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
+.plan-tier-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
+.plan-tier-row:last-child{border-bottom:none}
 .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
@@ -423,6 +427,19 @@ const CONFIG = {
   SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImV6ZHBoZHdkcXloY2d3Zm9paXZqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY4ODM0NzMsImV4cCI6MjEwMjQ1OTQ3M30.TbbjCucAZg410-q2Me6CVAHnPkw9Mwul-RhC2hc5SS4'
 };
 
+/* ---------------- cennik (plany podla poctu ludi) ----------------
+   Zatial bez automatickych platieb — ked niekto napise a zaplati,
+   majitel mu rucne zvysi people_limit v tabulke settings v Supabase.
+   Neskor sa da napojit napr. Stripe Checkout a toto uz bude automaticke. */
+const PLAN_TIERS = [
+  {upTo:3,  price:0},
+  {upTo:5,  price:9},
+  {upTo:10, price:19},
+  {upTo:20, price:39},
+  {upTo:Infinity, price:null} // individualna cena — napisat
+];
+const CONTACT_EMAIL = 'filiplazur89@gmail.com';
+
 /* ---------------- i18n (preklady su v lang.js) ---------------- */
 const T = window.LANGS;
 const LANG_CODES = Object.keys(T);
@@ -483,7 +500,8 @@ const S = {
   ownerId:null,        // ID prihláseného vlastníka (posielame ho pri zápise)
   ready:false,
   installPrompt:null,   // zachyteny beforeinstallprompt event (Android/desktop Chrome)
-  installHint:false     // zobrazit navod na instalaciu (iOS / prehliadace bez natívneho promptu)
+  installHint:false,    // zobrazit navod na instalaciu (iOS / prehliadace bez natívneho promptu)
+  peopleLimit:3         // kolko zamestnancov moze mat na svojom pláne (Free = 3)
 };
 const t = k => T[S.lang][k];
 
@@ -672,7 +690,10 @@ const DB = {
     return sbop(()=>sb.from('shifts').select('*').gte('date',from).order('date'));
   },
   async addEmployee(row){
-    if(!LIVE){const e={id:'e'+Date.now(),...row};MEM.employees.push(e);return e;}
+    if(!LIVE){
+      if(MEM.employees.length>=(MEM.settings.people_limit||3)) throw new Error('people_limit_reached');
+      const e={id:'e'+Date.now(),...row};MEM.employees.push(e);return e;
+    }
     // Kod sa moze zrazit s uz existujucim (unique owner_id+access_code).
     // Skusime az 6x s novym kodom, nez to vzdame.
     let lastErr=null;
@@ -730,13 +751,13 @@ const DB = {
   },
   /* --- nastavenie, kto zapisuje prichody a pozyvaci kod pre novych ludi --- */
   async loadSettings(){
-    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code};
-    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code').maybeSingle());
+    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit};
+    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit').maybeSingle());
     if(!data){
       // prvy start: zaloz riadok s predvolenym nastavenim (pozyvaci kod si databaza vygeneruje sama)
       const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:'owner'} : {punch_mode:'owner'};
-      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code').single());
-      return ins||{punch_mode:'owner'};
+      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit').single());
+      return ins||{punch_mode:'owner', people_limit:3};
     }
     return data;
   },
@@ -823,7 +844,7 @@ const DB = {
 };
 
 /* ---------------- demo dataset ---------------- */
-const MEM = {employees:[],shifts:[],settings:{punch_mode:'owner',invite_code:'DEM042'}};
+const MEM = {employees:[],shifts:[],settings:{punch_mode:'owner',invite_code:'DEM042',people_limit:3}};
 function seedDemo(){
   const ago=m=>new Date(Date.now()-m*60000).toISOString();
   MEM.employees = [
@@ -1356,7 +1377,47 @@ function loginInfo(e){
   return `<span class="lg">${t('lastLogin')}: ${when}</span>`;
 }
 
+function planPanel(){
+  const n=S.employees.length, lim=S.peopleLimit||3;
+  const tier=PLAN_TIERS.find(t2=>n<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
+  const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
+  const priceLabel = curTier.price===0 ? t('planFreeShort') : (curTier.price==null ? t('planCustomShort') : curTier.price+' €/'+t('perMonth'));
+  const atLimit = n>=lim;
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="plan-row">
+      <div>
+        <div class="eyebrow" style="margin-bottom:6px">${t('yourPlan')}</div>
+        <div>${n} / ${lim} ${t('peopleUsageLbl')} · <b>${esc(priceLabel)}</b></div>
+      </div>
+      <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
+    </div>
+    ${atLimit?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('limitWarn')}</p>`:''}
+  </div>`;
+}
+function pricingModalBody(reached){
+  const rows = PLAN_TIERS.map(tier=>{
+    const label = tier.upTo===Infinity ? t('planCustomRange') : (t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl'));
+    const price = tier.price===0 ? t('planFreeShort') : (tier.price==null ? t('planCustomShort') : tier.price+' €/'+t('perMonth'));
+    return `<div class="plan-tier-row"><span>${esc(label)}</span><b>${esc(price)}</b></div>`;
+  }).join('');
+  const subject=encodeURIComponent(t('upgradeMailSubject'));
+  const body=encodeURIComponent(t('upgradeMailBody'));
+  const mailto=`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+  return `<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('pricingTitle')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    ${reached?`<p class="help" style="margin:0 0 12px">${t('limitReachedBody')}</p>`:''}
+    <div class="plan-tier-list">${rows}</div>
+    <p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
+    <div class="sheet-act">
+      <a class="btn" href="${mailto}">${t('contactCta')}</a>
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+    </div>
+  </div></div>`;
+}
+function openPricingModal(reached){ openModal(pricingModalBody(!!reached)); }
 function viewPeople(){
+  const plan=planPanel();
   const mode=`<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('whoRecords')}</div>
     <div class="presets" style="grid-template-columns:1fr 1fr">
@@ -1376,7 +1437,7 @@ function viewPeople(){
     </div>
     <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
   </div>`;
-  return mode+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
+  return plan+mode+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
     <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
     ${S.employees.length?S.employees.map(e=>`
       <div class="person">
@@ -1854,7 +1915,7 @@ document.addEventListener('click',async ev=>{
 
     case 'demo': {
       seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
-      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null;
+      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3;
       S.role='owner'; S.view='today'; render(); break;
     }
 
@@ -1865,7 +1926,7 @@ document.addEventListener('click',async ev=>{
       try{
         await DB.signIn(email,pass);
         S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts();
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; }catch(e){}
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
         S.role='owner'; S.loginErr=''; render();
       }catch(e){ S.loginErr=t('badLogin'); render(); }
       break;
@@ -2042,7 +2103,11 @@ document.addEventListener('click',async ev=>{
       }catch(err){ dbErr(err); }
       break;
     }
-    case 'new-person': openPersonModal(); break;
+    case 'new-person':
+      if(S.employees.length>=(S.peopleLimit||3)){ openPricingModal(true); }
+      else openPersonModal();
+      break;
+    case 'show-pricing': openPricingModal(false); break;
     case 'save-person': {
       const name=(document.getElementById('p-name').value||'').trim();
       const rate=parseFloat(document.getElementById('p-rate').value)||0;
@@ -2051,7 +2116,10 @@ document.addEventListener('click',async ev=>{
         const e=await DB.addEmployee({name,hourly_rate:rate,access_code:makeCode()});
         S.employees.push(e); S.employees.sort((a,b)=>a.name.localeCompare(b.name));
         closeModal(); toast(t('added')); render();
-      }catch(err){ dbErr(err); }
+      }catch(err){
+        if((err&&err.message)==='people_limit_reached'){ openPricingModal(true); }
+        else dbErr(err);
+      }
       break;
     }
     case 'del-person': {
@@ -2115,7 +2183,7 @@ setInterval(()=>{
       if(ses){
         S.employees=await DB.loadEmployees();
         S.shifts=await DB.loadShifts();
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; }catch(e){}
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
         S.role='owner';
       }
     }catch(e){console.warn(e)}
