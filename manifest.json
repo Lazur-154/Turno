@@ -1,6 +1,6 @@
 {
-  "name": "Šichta — evidencia zmien",
-  "short_name": "Šichta",
+  "name": "Turno — evidencia zmien",
+  "short_name": "Turno",
   "description": "Evidencia zmien a dochádzky pre malé prevádzky.",
   "start_url": "./",
   "scope": "./",
@@ -28,7 +28,7 @@
       "purpose": "maskable"
     }
   ],
-  "id": "sichta",
+  "id": "turno",
   "categories": [
     "business",
     "productivity"

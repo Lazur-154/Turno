@@ -1,5 +1,5 @@
 /* ============================================================
-   SICHTA - service worker
+   TURNO - service worker
    Vdaka nemu sa appka otvori aj bez signalu a da sa nainstalovat.
 
    DOLEZITE pri testovani:
@@ -11,7 +11,7 @@
    Obrazky a fonty sa beru z cache, tie sa nemenia.
    ============================================================ */
 
-const VERSION = 'sichta-v2.4';
+const VERSION = 'turno-v1.0';
 const SHELL = [
   './', './index.html', './lang.js', './manifest.json',
   './icon-192.png', './icon-512.png', './icon-maskable-512.png'

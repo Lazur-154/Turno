@@ -3,9 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Šichta — evidencia zmien</title>
+<title>Turno — evidencia zmien</title>
 <meta name="theme-color" content="#0E2530">
 <link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icon-192.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -321,6 +322,7 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .invite-row{display:flex;gap:8px;margin-bottom:10px}
 .invite-row input{flex:1;min-width:0;font-size:13px}
 .invite-row .btn{white-space:nowrap;min-height:44px}
+.install-row{margin-top:14px;text-align:center}
 .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
@@ -412,7 +414,7 @@ body.locked{overflow:hidden}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 /* ============================================================
-   ŠICHTA v2 — konfigurácia
+   TURNO v2 — konfigurácia
    Doplň údaje z Supabase (Project Settings → API).
    Ak zostanú prázdne, appka beží v DEMO režime (dáta v pamäti).
    ============================================================ */
@@ -479,7 +481,9 @@ const S = {
   punchMode:'owner',   // 'owner' = kliká len vlastník, 'self' = aj zamestnanci
   myCode:null,         // kód, ktorým sa zamestnanec prihlásil
   ownerId:null,        // ID prihláseného vlastníka (posielame ho pri zápise)
-  ready:false
+  ready:false,
+  installPrompt:null,   // zachyteny beforeinstallprompt event (Android/desktop Chrome)
+  installHint:false     // zobrazit navod na instalaciu (iOS / prehliadace bez natívneho promptu)
 };
 const t = k => T[S.lang][k];
 
@@ -580,7 +584,7 @@ function makeCode(){
    potichu — okno len zostalo stat a clovek nemal ako zistit, co sa deje. */
 function dbErr(e){
   const msg = (e && (e.message || e.error_description || e.hint || e.details)) || String(e);
-  console.error('Šichta — chyba databázy:', e);
+  console.error('Turno — chyba databázy:', e);
   toastLong('⚠ ' + msg);
 }
 function toastLong(msg){
@@ -869,7 +873,7 @@ function seedDemo(){
   if(re_<now) MEM.shifts[MEM.shifts.length-1].breaks=[{s:rs.toISOString(),e:re_.toISOString()}];
 
   // jedna uzavreta zmena — musi existovat VZDY, inak sa v deme nikdy neukaze,
-  // ako vyzera hotova sichta ani tlacidlo Opravit.
+  // ako vyzera hotova turno ani tlacidlo Opravit.
   if(now.getHours()>=9){
     // denna zmena, skoncila pol hodiny dozadu
     const outT=new Date(now.getTime()-30*60000);
@@ -942,12 +946,24 @@ function viewLogin(){
   else                                  body=viewOwnerLogin();
   return `<div class="login">
     <div>
-      <div class="logo">Ši<b>chta</b></div>
+      <div class="logo">turno<b>.app</b></div>
       <div class="tag">${t('tagline')}</div>
     </div>
     ${body}
+    ${installBlock()}
     <div class="mode-note">${LIVE?t('liveNote'):t('demoNote')}</div>
     <div><label>${t('language')}</label>${langSelect('lang-login')}</div>
+  </div>`;
+}
+function isStandaloneApp(){
+  return (window.matchMedia && window.matchMedia('(display-mode: standalone)').matches) || navigator.standalone===true;
+}
+function installBlock(){
+  if(isStandaloneApp()) return '';
+  const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent);
+  return `<div class="install-row">
+    <button class="btn ghost" style="padding:14px;font-size:15px" data-act="install-app">${t('installApp')}</button>
+    ${S.installHint ? `<p class="help" style="text-align:center;font-size:13px;margin:8px 0 0">${isIOS?t('installHintIOS'):t('installHint')}</p>` : ''}
   </div>`;
 }
 function viewOwnerLogin(){
@@ -1013,7 +1029,7 @@ function viewHeader(navHtml){
   const dn=T[S.lang].dayNames[d.getDay()];
   return `<header class="bar">
     <div class="bar-row">
-      <div class="brand">Ši<b>chta</b></div>
+      <div class="brand">turno<b>.app</b></div>
       <div class="bar-tools">
         ${langSelect('lang-head')}
         <button class="icon-btn" data-act="signout">${t('signout')}</button>
@@ -1679,6 +1695,16 @@ document.addEventListener('click',async ev=>{
   switch(a){
     case 'lang': setLang(el.dataset.v); render(); break;
     case 'ltab': S.loginTab=el.dataset.v; S.loginErr=''; S.signupDone=false; render(); break;
+    case 'install-app': {
+      if(S.installPrompt){
+        S.installPrompt.prompt();
+        try{ await S.installPrompt.userChoice; }catch(e){}
+        S.installPrompt=null; render();
+      } else {
+        S.installHint=!S.installHint; render();
+      }
+      break;
+    }
     case 'view': S.view=el.dataset.v; render(); break;
     case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
@@ -2108,6 +2134,14 @@ setInterval(()=>{
   if('serviceWorker' in navigator){
     navigator.serviceWorker.register('sw.js').catch(()=>{});
   }
+  window.addEventListener('beforeinstallprompt', e=>{
+    e.preventDefault();
+    S.installPrompt=e;
+    render();
+  });
+  window.addEventListener('appinstalled', ()=>{
+    S.installPrompt=null; S.installHint=false; render();
+  });
 })();
 </script>
 </body>
