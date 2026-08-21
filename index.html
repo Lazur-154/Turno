@@ -1158,10 +1158,19 @@ const DB = {
       const CUTOFF_MS=90*60000;
       const open=MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival&&!x.departure);
       const nowIso=new Date().toISOString(), nowMs=Date.now();
+      /* Ak uz ma na dnes naplanovanu (este nezacatu) zmenu, vyplnime prichod
+         do NEJ — inak by vedla zdvojena karta (planovana + nova) pre toho
+         isteho cloveka na Dnes, presne to co sa stalo pri prvom teste. */
+      const fillPlanned=()=>MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&!x.arrival);
       if(!open){
-        const sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
-                  plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
-        MEM.shifts.push(sh);
+        const planned=fillPlanned();
+        let sh;
+        if(planned){ planned.arrival=nowIso; sh=planned; }
+        else{
+          sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+              plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+          MEM.shifts.push(sh);
+        }
         return {action:'in', name:me.name, shift:sh};
       }
       const list=Array.isArray(open.breaks)?open.breaks.slice():[];
@@ -1179,10 +1188,15 @@ const DB = {
       }
       // prekrocil limit => stara zmena sa uzavrela, zacina nova
       open.departure=new Date(lastS+CUTOFF_MS).toISOString();
-      const sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
-                plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
-      MEM.shifts.push(sh);
-      return {action:'in', name:me.name, shift:sh};
+      const planned2=fillPlanned();
+      let sh2;
+      if(planned2){ planned2.arrival=nowIso; sh2=planned2; }
+      else{
+        sh2={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+             plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+        MEM.shifts.push(sh2);
+      }
+      return {action:'in', name:me.name, shift:sh2};
     }
     const data = await sbop(()=>sb.rpc('emp_punch_station',{p_code:code, p_station:stationToken}));
     return data||null;
