@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:xhtml="http://www.w3.org/1999/xhtml">
+  <url>
+    <loc>https://turno.sk/</loc>
+    <changefreq>weekly</changefreq>
+    <priority>1.0</priority>
+    <xhtml:link rel="alternate" hreflang="sk" href="https://turno.sk/?lang=sk"/>
+    <xhtml:link rel="alternate" hreflang="cs" href="https://turno.sk/?lang=cs"/>
+    <xhtml:link rel="alternate" hreflang="pl" href="https://turno.sk/?lang=pl"/>
+    <xhtml:link rel="alternate" hreflang="hu" href="https://turno.sk/?lang=hu"/>
+    <xhtml:link rel="alternate" hreflang="de" href="https://turno.sk/?lang=de"/>
+    <xhtml:link rel="alternate" hreflang="en" href="https://turno.sk/?lang=en"/>
+    <xhtml:link rel="alternate" hreflang="hr" href="https://turno.sk/?lang=hr"/>
+    <xhtml:link rel="alternate" hreflang="bg" href="https://turno.sk/?lang=bg"/>
+    <xhtml:link rel="alternate" hreflang="ru" href="https://turno.sk/?lang=ru"/>
+    <xhtml:link rel="alternate" hreflang="x-default" href="https://turno.sk/"/>
+  </url>
+</urlset>

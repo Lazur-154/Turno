@@ -3,7 +3,25 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Turno — evidencia zmien</title>
+<title>Turno — evidencia dochádzky a zmien pre malé prevádzky</title>
+<meta name="description" content="Turno je jednoduchá evidencia dochádzky pre malé prevádzky. Zamestnanci si zapíšu príchod a odchod v telefóne, vy vidíte odpracované hodiny aj mzdy na jednom mieste. Do 3 ľudí zadarmo. | Simple time and attendance tracking for small businesses.">
+<link rel="canonical" href="https://turno.sk/">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Turno">
+<meta property="og:url" content="https://turno.sk/">
+<meta property="og:title" content="Turno — evidencia dochádzky pre malé prevádzky">
+<meta property="og:description" content="Zamestnanci si zapíšu príchod a odchod v telefóne, vy vidíte odpracované hodiny aj mzdy na jednom mieste. Do 3 ľudí zadarmo.">
+<meta property="og:image" content="https://turno.sk/icon-512.png">
+<meta property="og:locale" content="sk_SK">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:locale:alternate" content="cs_CZ">
+<meta property="og:locale:alternate" content="pl_PL">
+<meta property="og:locale:alternate" content="hu_HU">
+<meta property="og:locale:alternate" content="de_DE">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Turno — evidencia dochádzky pre malé prevádzky">
+<meta name="twitter:description" content="Príchody a odchody v telefóne, hodiny a mzdy na jednom mieste. Do 3 ľudí zadarmo.">
+<meta name="twitter:image" content="https://turno.sk/icon-512.png">
 <meta name="theme-color" content="#0E2530">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" href="icon-192.png" type="image/png">
@@ -446,6 +464,18 @@ body.locked{overflow:hidden}
 <body>
 
 <div id="root"></div>
+<noscript>
+  <h1>Turno — evidencia dochádzky a zmien</h1>
+  <p>Turno je jednoduchá evidencia dochádzky pre malé prevádzky — kaviarne, dielne,
+     obchody a penzióny. Zamestnanci si zapíšu príchod a odchod v telefóne,
+     majiteľ vidí odpracované hodiny aj mzdy na jednom mieste. Nič sa neinštaluje,
+     appka beží v prehliadači. Do 3 zamestnancov zadarmo.</p>
+  <h2>Turno — time and attendance tracking</h2>
+  <p>Turno is simple time and attendance tracking for small businesses. Staff clock in
+     and out on their phone, the owner sees hours worked and wages in one place.
+     Nothing to install, it runs in the browser. Free for up to 3 people.</p>
+  <p>Na používanie appky treba zapnutý JavaScript. / JavaScript is required.</p>
+</noscript>
 <div id="modal"></div>
 
 <script src="lang.js"></script>
@@ -511,6 +541,15 @@ function langFromUrl(){
   try{
     const v=new URLSearchParams(location.search).get('lang');
     if(v&&T[v]) return v;
+  }catch(e){}
+  /* Bez ?lang= sa riadime jazykom prehliadaca — Nemec ma otvori po nemecky,
+     Anglican po anglicky. Ked jeho jazyk nemame, ostava slovencina. */
+  try{
+    const pref = navigator.languages || [navigator.language || ''];
+    for(const l of pref){
+      const code = String(l).slice(0,2).toLowerCase();
+      if(T[code]) return code;
+    }
   }catch(e){}
   return 'sk';
 }
@@ -1167,6 +1206,10 @@ function viewLogin(){
     </div>
     ${body}
     ${installBlock()}
+    <div class="panel" style="margin-top:4px">
+      <div class="eyebrow" style="margin-bottom:8px">${t('aboutTitle')}</div>
+      <p class="help" style="margin:0">${t('aboutBody')}</p>
+    </div>
     <div class="mode-note">${LIVE?t('liveNote'):t('demoNote')}</div>
     <div><label>${t('language')}</label>${langSelect('lang-login')}</div>
   </div>`;
