@@ -538,7 +538,9 @@ const S = {
   installPrompt:null,   // zachyteny beforeinstallprompt event (Android/desktop Chrome)
   installHint:false,    // zobrazit navod na instalaciu (iOS / prehliadace bez natívneho promptu)
   peopleLimit:3,        // kolko zamestnancov moze mat na svojom pláne (Free = 3)
-  billingBusy:false     // prebieha presmerovanie na Stripe (checkout/portal) — zabranuje dvojkliku
+  billingBusy:false,    // prebieha presmerovanie na Stripe (checkout/portal) — zabranuje dvojkliku
+  platneDo:null,        // datum, do ktoreho je predplatne zaplatene (YYYY-MM-DD); null = bez obmedzenia
+  typPredplatneho:'mesacne'  // 'mesacne' | 'rocne'
 };
 const t = k => T[S.lang][k];
 
@@ -546,6 +548,13 @@ const t = k => T[S.lang][k];
 function pad(n){return String(n).padStart(2,'0')}
 function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function todayISO(){return iso(new Date())}
+/* Predplatne: ak je platne_do v minulosti, appka sa zamkne.
+   Prazdna hodnota = bez obmedzenia (demo, stare ucty). */
+function isLocked(dateStr){
+  const d = (dateStr===undefined ? S.platneDo : dateStr);
+  if(!d) return false;
+  return String(d).slice(0,10) < todayISO();
+}
 function mondayOf(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
 function startOfMonth(d){return new Date(d.getFullYear(),d.getMonth(),1)}
 function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
@@ -806,12 +815,12 @@ const DB = {
   },
   /* --- nastavenie, kto zapisuje prichody a pozyvaci kod pre novych ludi --- */
   async loadSettings(){
-    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit};
-    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit').maybeSingle());
+    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit, platne_do: null, typ_predplatneho: 'mesacne'};
+    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho').maybeSingle());
     if(!data){
       // prvy start: zaloz riadok s predvolenym nastavenim (pozyvaci kod si databaza vygeneruje sama)
       const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:'owner'} : {punch_mode:'owner'};
-      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit').single());
+      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho').single());
       return ins||{punch_mode:'owner', people_limit:3};
     }
     return data;
@@ -998,6 +1007,7 @@ const modalHost=document.getElementById('modal');
 
 function render(){
   if(!S.role){ root.innerHTML=viewLogin(); return; }
+  if(isLocked()){ root.innerHTML=viewLocked(); return; }
   root.innerHTML = `
     <div id="app">
       ${viewHeader(S.role==='owner' ? navTabs() : '')}
@@ -1658,6 +1668,25 @@ function viewPeople(){
         <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
     ${supportPanel()}`;
 }
+/* ---------- zamknuta appka: predplatne vyprsalo ---------- */
+function viewLocked(){
+  return `<div class="login">
+    <div>
+      <div class="logo">turno<b>.app</b></div>
+      <div class="tag">${t('tagline')}</div>
+    </div>
+    <div class="panel">
+      <div class="eyebrow" style="margin-bottom:10px">🔒 ${t('lockedTitle')}</div>
+      <p class="help" style="margin:0 0 12px">${t('lockedBody')}</p>
+      <div class="support-row">
+        <a class="btn ghost" href="tel:${CONTACT_PHONE}">📞 ${CONTACT_PHONE_DISPLAY}</a>
+        <a class="btn ghost" href="mailto:${CONTACT_EMAIL}">✉ ${t('supportEmail')}</a>
+      </div>
+    </div>
+    <button class="btn ghost" data-act="signout">${t('signout')}</button>
+    <div class="mode-note">${langSelect('locked-lang')}</div>
+  </div>`;
+}
 function supportPanel(){
   return `<div class="panel" style="margin-top:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
@@ -2128,7 +2157,7 @@ document.addEventListener('click',async ev=>{
 
     case 'demo': {
       seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
-      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3;
+      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne';
       S.role='owner'; S.view='today'; render(); break;
     }
 
@@ -2139,7 +2168,7 @@ document.addEventListener('click',async ev=>{
       try{
         await DB.signIn(email,pass);
         S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne'; }catch(e){}
         S.role='owner'; S.loginErr=''; render();
       }catch(e){ S.loginErr=t('badLogin'); render(); }
       break;
@@ -2173,7 +2202,7 @@ document.addEventListener('click',async ev=>{
         try{ me=await DB.employeeByCode(res.access_code); }catch(e2){}
         if(!me) me={id:res.id, name:res.name, hourly_rate:0, access_code:res.access_code};
         try{ S.shifts=await DB.employeeShifts(res.access_code); }catch(e2){ S.shifts=[]; }
-        S.employees=[me]; S.me=me; S.myCode=res.access_code;
+        S.employees=[me]; S.me=me; S.myCode=res.access_code; S.platneDo=me.platne_do||null;
         S.role='employee'; S.loginErr='';
         clearJoinFromUrl();
         render();
@@ -2209,10 +2238,10 @@ document.addEventListener('click',async ev=>{
       if(!me){ S.loginErr=t('badCode'); render(); return; }
       try{ S.shifts=await DB.employeeShifts(code); }catch(e){ S.shifts=[]; }
       if(!LIVE){ try{ S.punchMode=(await DB.loadSettings()).punch_mode||'owner'; }catch(e){} }
-      S.employees=[me]; S.me=me; S.myCode=code;
+      S.employees=[me]; S.me=me; S.myCode=code; S.platneDo=me.platne_do||null;
       S.role='employee'; S.loginErr=''; render(); break;
     }
-    case 'signout': await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; render(); break;
+    case 'signout': await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; render(); break;
 
     case 'punch-in': {
       const id=el.dataset.id;
@@ -2441,7 +2470,7 @@ setInterval(()=>{
         S.employees=await DB.loadEmployees();
         S.shifts=await DB.loadShifts();
         try{ S.notes=await DB.loadNotes(); }catch(e){}
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; }catch(e){}
+        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne'; }catch(e){}
         S.role='owner';
       }
     }catch(e){console.warn(e)}
@@ -2462,6 +2491,7 @@ setInterval(()=>{
           try{
             const st=await DB.loadSettings();
             S.peopleLimit=st.people_limit||3;
+            S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne';
             if(S.peopleLimit!==before){ render(); break; }
           }catch(e){ break; }
         }
