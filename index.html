@@ -585,7 +585,8 @@ const S = {
   subModal:false,       // je otvorene okno "Spravovat predplatne"?
   isAdmin:false,        // som majitel appky? (rozhoduje o tom Supabase, toto je len pre zobrazenie)
   adminRows:null,       // prehlad vsetkych firiem pre admin obrazovku
-  adminBusy:false
+  adminBusy:false,
+  payTier:null          // plan, ktory si clovek vybral v platobnom paneli (null = ten, co ma)
 };
 const t = k => T[S.lang][k];
 
@@ -609,6 +610,28 @@ function subState(){
   const dl = subDaysLeft();
   if(dl===null || dl>=0) return 'ok';
   return (dl >= -GRACE_DAYS) ? 'grace' : 'locked';
+}
+/* Popis planu do zoznamu: "Do 10 zamestnancov" / "Nad 100 zamestnancov" */
+function tierLabel(tier, i){
+  if(tier.upTo===Infinity){
+    const prev = PLAN_TIERS[i-1] ? PLAN_TIERS[i-1].upTo : 0;
+    return t('planOver')+' '+prev+' '+t('peopleUsageLbl');
+  }
+  return t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl');
+}
+/* Cena planu pre zvoleny sposob platby. Rocne = 10x mesacne. */
+function tierPrice(tier, plan){
+  if(!tier || typeof tier.price!=='number') return null;
+  return plan==='rocne' ? tier.price*YEAR_MONTHS : tier.price;
+}
+function tierPriceLabel(tier, plan){
+  const c = tierPrice(tier, plan);
+  if(c===null) return t('planCustomShort');
+  if(c===0) return t('planFreeShort');
+  return money(c)+' / '+(plan==='rocne'?t('perYear'):t('perMonth'));
+}
+function tierByLimit(lim){
+  return PLAN_TIERS.find(x=>lim<=x.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
 }
 /* Suma podla poctu ludi, ktory ma firma zaplateny (people_limit). */
 function subPrice(){
@@ -918,6 +941,9 @@ const DB = {
   },
   async adminPredlz(kod, typ, pocet){
     return await sbop(()=>sb.rpc('admin_predlz',{p_kod:kod, p_typ:typ, p_pocet:pocet}));
+  },
+  async adminLimit(kod, limit){
+    return await sbop(()=>sb.rpc('admin_limit',{p_kod:kod, p_limit:limit}));
   },
   async adminNastav(kod, datum, typ){
     return await sbop(()=>sb.rpc('admin_nastav',{p_kod:kod, p_datum:datum, p_typ:typ}));
@@ -1606,6 +1632,7 @@ function planPanel(){
 }
 function pricingModalBody(reached){
   const n=S.employees.length, lim=S.peopleLimit||3;
+  const plan = S.payPlan || S.typPredplatneho || 'mesacne';
   const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
   /* Checkout vytvara VZDY novu Stripe subscription. Ked uz clovek plati,
      ponuknut mu znova "Vybrať plán" na inom riadku by mu založilo druhé,
@@ -1622,7 +1649,7 @@ function pricingModalBody(reached){
     } else {
       label = t('planUpTo')+' '+tier.upTo+' '+t('peopleUsageLbl');
     }
-    const price = tier.price===0 ? t('planFreeShort') : (tier.price==null ? t('planCustomShort') : tier.price+' €/'+t('perMonth'));
+    const price = tierPriceLabel(tier, plan);
     const isCurrent = tier.key===curTier.key;
     let action;
     if(isCurrent){
@@ -1640,6 +1667,11 @@ function pricingModalBody(reached){
     <div class="sheet-head"><h3>${t('pricingTitle')}</h3>
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
     ${reached?`<p class="help" style="margin:0 0 12px">${t('limitReachedBody')}</p>`:''}
+    <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:6px">
+      <button data-act="pay-plan" data-v="mesacne" aria-pressed="${plan!=='rocne'}">${t('payMonthly')}</button>
+      <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}<span class="pill">${t('recommended')}</span></button>
+    </div>
+    ${plan==='rocne'?`<p class="help" style="margin:0 0 10px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
     <div class="plan-tier-list">${rows}</div>
     ${alreadyPaying
       ?`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
@@ -1768,13 +1800,18 @@ function viewPeople(){
 /* Zamestnanec toto NIKDY nevidi — predplatne neplati on a emp_me mu ani
    nevracia people_limit, takze by videl nespravnu sumu. */
 function payBlock(){
-  const monthly = subPrice();
   const plan = S.payPlan || S.typPredplatneho || 'mesacne';
-  const yearly = (monthly==null) ? null : monthly*YEAR_MONTHS;
-  const amount = plan==='rocne' ? yearly : monthly;
+  const mojLimit = S.peopleLimit||3;
+  const zvoleny = (S.payTier===null || S.payTier===undefined) ? mojLimit : S.payTier;
+  const tier = tierByLimit(zvoleny);
+  const mojTier = tierByLimit(mojLimit);
+  const inyPlan = tier !== mojTier;
   const note = S.inviteCode || '';
-  const amountLbl = (amount==null) ? t('planCustomShort')
-    : money(amount)+' / '+(plan==='rocne'?t('perYear'):t('perMonth'));
+  const amountLbl = tierPriceLabel(tier, plan);
+  const planOptions = PLAN_TIERS.map((x,i)=>{
+    const v = (x.upTo===Infinity) ? 9999 : x.upTo;
+    return `<option value="${v}" ${x===tier?'selected':''}>${esc(tierLabel(x,i))} \u2014 ${esc(tierPriceLabel(x,plan))}</option>`;
+  }).join('');
   return `<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('payHow')}</div>
     <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
@@ -1782,6 +1819,9 @@ function payBlock(){
       <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}<span class="pill">${t('recommended')}</span></button>
     </div>
     ${plan==='rocne'?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
+    <select class="langsel" data-act="pay-tier" aria-label="${t('yourPlan')}"
+      style="width:100%;margin-bottom:12px">${planOptions}</select>
+    ${inyPlan?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('payOtherPlan')}</p>`:''}
     <div class="paygrid">
       <span>${t('payRecipient')}</span><b>${esc(PAY_RECIPIENT)}</b>
       <span>${t('payIban')}</span><b>${esc(PAY_IBAN)}</b>
@@ -1824,6 +1864,7 @@ function viewAdmin(){
       <td style="text-align:right;white-space:nowrap">
         <button class="sr-edit" data-act="admin-add" data-kod="${esc(r.kod)}" data-typ="mesacne"${S.adminBusy?' disabled':''}>${'+1 mesiac'}</button>
         <button class="sr-edit" data-act="admin-add" data-kod="${esc(r.kod)}" data-typ="rocne"${S.adminBusy?' disabled':''}>${'+1 rok'}</button>
+        <button class="sr-edit" data-act="admin-limit" data-kod="${esc(r.kod)}" data-lim="${r.limit_ludi}"${S.adminBusy?' disabled':''}>Plán</button>
       </td></tr>`;
   }).join('');
   return `<div class="panel">
@@ -2395,6 +2436,23 @@ document.addEventListener('click',async ev=>{
       }
       break;
     }
+    case 'admin-limit': {
+      const kod=el.dataset.kod;
+      const teraz=el.dataset.lim;
+      const zoznam=PLAN_TIERS.map((x,i)=>(x.upTo===Infinity?9999:x.upTo)+' = '+tierLabel(x,i)+' ('+x.price+' €/mes)').join('\n');
+      const v=prompt('Nový limit ľudí pre firmu '+kod+':\n\n'+zoznam+'\n\nTeraz: '+teraz, teraz);
+      if(v===null) break;
+      const lim=parseInt(v,10);
+      if(!lim||lim<1){ toast('Zlé číslo'); break; }
+      S.adminBusy=true; render();
+      try{
+        await DB.adminLimit(kod,lim);
+        toast(kod+' \u2013 limit '+lim);
+        if(kod===S.inviteCode) S.peopleLimit=lim;
+      }catch(err){ dbErr(err); }
+      S.adminBusy=false; S.adminRows=null; render(); loadAdmin();
+      break;
+    }
     case 'admin-reload': S.adminRows=null; render(); loadAdmin(); break;
     case 'admin-add': {
       const kod=el.dataset.kod, typ=el.dataset.typ;
@@ -2410,7 +2468,9 @@ document.addEventListener('click',async ev=>{
       break;
     }
     case 'pay-plan': S.payPlan=el.dataset.v;
-      if(S.subModal) openModal(subModalBody()); else render();
+      if(S.subModal) openModal(subModalBody());
+      else if(document.querySelector('.plan-tier-list')) openModal(pricingModalBody(false));
+      else render();
       break;
     case 'copy-iban': {
       const val = PAY_IBAN.replace(/\s+/g,'');
@@ -2634,6 +2694,11 @@ document.addEventListener('click',async ev=>{
 document.addEventListener('change',async ev=>{
   const el=ev.target;
   if(el.dataset&&el.dataset.act==='langsel'){ setLang(el.value); render(); return; }
+  if(el.dataset&&el.dataset.act==='pay-tier'){
+    S.payTier = parseInt(el.value,10)||3;
+    if(S.subModal) openModal(subModalBody()); else render();
+    return;
+  }
   if(el.dataset&&el.dataset.act==='rate'){
     const v=parseFloat(el.value)||0;
     try{
