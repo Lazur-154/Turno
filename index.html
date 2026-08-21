@@ -489,6 +489,18 @@ const CONTACT_EMAIL = 'filiplazur89@gmail.com';
 const ADMIN_EMAIL = 'filiplazur89@gmail.com';
 const CONTACT_PHONE = '+421917294556';
 const CONTACT_PHONE_DISPLAY = '+421 917 294 556';
+const CONTACT_WA = '421917294556';   // WhatsApp: cislo bez plusu a medzier
+/* WhatsApp otvori appku (na mobile) alebo web.whatsapp.com (na pocitaci).
+   mailto: sme zrusili — na Windows to otvaralo Outlook, ktory nikto nepouziva. */
+function waLink(text){
+  return 'https://wa.me/'+CONTACT_WA+(text?('?text='+encodeURIComponent(text)):'');
+}
+/* Gmail v prehliadaci namiesto mailto:. Kto Gmail nema, adresu vidi vypisanu. */
+function gmailLink(subject, body){
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to='+encodeURIComponent(CONTACT_EMAIL)
+    + (subject?('&su='+encodeURIComponent(subject)):'')
+    + (body?('&body='+encodeURIComponent(body)):'');
+}
 
 /* ---------------- i18n (preklady su v lang.js) ---------------- */
 const T = window.LANGS;
@@ -1623,7 +1635,7 @@ function pricingModalBody(reached){
   }).join('');
   const subject=encodeURIComponent(t('upgradeMailSubject'));
   const body=encodeURIComponent(t('upgradeMailBody'));
-  const mailto=`mailto:${CONTACT_EMAIL}?subject=${subject}&body=${body}`;
+  const kontakt = waLink(t('upgradeMailSubject')+' \u2014 '+t('upgradeMailBody'));
   return `<div class="scrim" data-act="scrim"><div class="sheet">
     <div class="sheet-head"><h3>${t('pricingTitle')}</h3>
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
@@ -1633,11 +1645,11 @@ function pricingModalBody(reached){
       ?`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
         <div class="sheet-act">
           <button class="btn" data-act="manage-sub">${t('manageSubBtn')}</button>
-          <a class="btn ghost" href="${mailto}">${t('contactCta')}</a>
+          <a class="btn ghost" href="${kontakt}" target="_blank" rel="noopener">💬 ${t('contactCta')}</a>
         </div>`
       :`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
         <div class="sheet-act">
-          <a class="btn ghost" href="${mailto}">${t('contactCta')}</a>
+          <a class="btn ghost" href="${kontakt}" target="_blank" rel="noopener">💬 ${t('contactCta')}</a>
           <button class="btn ghost" data-act="close">${t('cancel')}</button>
         </div>`}
   </div></div>`;
@@ -1776,7 +1788,10 @@ function payBlock(){
       <span>${t('payAmount')}</span><b>${esc(amountLbl)}</b>
       ${note?`<span>${t('payNote')}</span><b>${esc(note)}</b>`:''}
     </div>
-    <button class="btn ghost" data-act="copy-iban" style="margin-top:14px">${t('copyIban')}</button>
+    <div class="support-row" style="margin-top:14px">
+      <button class="btn ghost" data-act="copy-iban">${t('copyIban')}</button>
+      <a class="btn ghost" href="${waLink(t('payPaidWaMsg').replace('{kod}', note||'\u2013').replace('{suma}', amountLbl))}" target="_blank" rel="noopener">💬 ${t('payPaidBtn')}</a>
+    </div>
     <p class="help" style="margin:12px 0 0">${plan==='rocne'?t('payHintYearly'):t('payHintMonthly')}</p>
   </div>`;
 }
@@ -1849,9 +1864,11 @@ function supportPanel(){
     <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
     <p class="help" style="margin:0 0 10px">${t('supportBody')}</p>
     <div class="support-row">
+      <a class="btn ghost" href="${waLink('')}" target="_blank" rel="noopener">💬 ${t('supportWhatsapp')}</a>
       <a class="btn ghost" href="tel:${CONTACT_PHONE}">📞 ${CONTACT_PHONE_DISPLAY}</a>
-      <a class="btn ghost" href="mailto:${CONTACT_EMAIL}">✉ ${t('supportEmail')}</a>
+      <a class="btn ghost" href="${gmailLink('','')}" target="_blank" rel="noopener">✉ ${t('supportEmail')}</a>
     </div>
+    <p class="help" style="margin:10px 0 0">${esc(CONTACT_EMAIL)}</p>
   </div>`;
 }
 
