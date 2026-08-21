@@ -483,6 +483,10 @@ const YEAR_MONTHS = 10;
 const RENEW_WARN_DAYS = 7;   // od kolkych dni pred koncom zacneme upozornovat
 const GRACE_DAYS = 3;        // kolko dni po vyprsani este vsetko funguje normalne   // od kolkych dni pred koncom zacneme upozornovat
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
+/* Majitel appky — vidi admin obrazovku. Toto je len pre zobrazenie tlacidla;
+   skutocnu kontrolu robi Supabase (funkcia je_admin), takze podvrhnutim
+   tejto hodnoty v prehliadaci sa nikto k nicomu nedostane. */
+const ADMIN_EMAIL = 'filiplazur89@gmail.com';
 const CONTACT_PHONE = '+421917294556';
 const CONTACT_PHONE_DISPLAY = '+421 917 294 556';
 
@@ -566,7 +570,10 @@ const S = {
   typPredplatneho:'mesacne', // 'mesacne' | 'rocne' — co ma clovek nastavene v DB
   payPlan:null,         // co si prave prezera v platobnom paneli (null = podla DB)
   readonly:false,       // predplatne dobehlo aj s odkladom — appka je len na citanie
-  subModal:false        // je otvorene okno "Spravovat predplatne"?
+  subModal:false,       // je otvorene okno "Spravovat predplatne"?
+  isAdmin:false,        // som majitel appky? (rozhoduje o tom Supabase, toto je len pre zobrazenie)
+  adminRows:null,       // prehlad vsetkych firiem pre admin obrazovku
+  adminBusy:false
 };
 const t = k => T[S.lang][k];
 
@@ -772,6 +779,7 @@ const DB = {
     const {data,error} = await sb.auth.signInWithPassword({email,password});
     if(error) throw error;
     S.ownerId = data.user && data.user.id;
+    S.isAdmin = ((data.user && data.user.email)||'').toLowerCase()===ADMIN_EMAIL;
     return data.user;
   },
   async signUp(email,password){
@@ -785,7 +793,10 @@ const DB = {
   async session(){
     if(!LIVE||!sb) return null;
     const {data}=await sb.auth.getSession();
-    if(data.session&&data.session.user) S.ownerId=data.session.user.id;
+    if(data.session&&data.session.user){
+      S.ownerId=data.session.user.id;
+      S.isAdmin=(data.session.user.email||'').toLowerCase()===ADMIN_EMAIL;
+    }
     return data.session;
   },
 
@@ -887,6 +898,17 @@ const DB = {
       return ins||{punch_mode:'owner', people_limit:3};
     }
     return data;
+  },
+  /* --- admin: prehlad a predlzovanie predplatneho (len majitel appky) --- */
+  async adminPrehlad(){
+    if(!LIVE) return [];
+    return await sbop(()=>sb.rpc('admin_prehlad')) || [];
+  },
+  async adminPredlz(kod, typ, pocet){
+    return await sbop(()=>sb.rpc('admin_predlz',{p_kod:kod, p_typ:typ, p_pocet:pocet}));
+  },
+  async adminNastav(kod, datum, typ){
+    return await sbop(()=>sb.rpc('admin_nastav',{p_kod:kod, p_datum:datum, p_typ:typ}));
   },
   async savePunchMode(mode){
     if(!LIVE){ MEM.settings.punch_mode=mode; return; }
@@ -1080,7 +1102,8 @@ function render(){
         S.view==='today' ? viewToday() :
         S.view==='plan'  ? viewPlan()  :
         S.view==='cal'   ? viewCal()   :
-        S.view==='notes' ? viewNotes() : viewPeople()
+        S.view==='notes' ? viewNotes() :
+        S.view==='admin' ? viewAdmin() : viewPeople()
       }</main>
       ${S.role==='owner' ? '' : ''}
     </div>`;
@@ -1200,6 +1223,7 @@ function viewHeader(navHtml){
 
 function navTabs(){
   const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['notes',t('tabNotes')],['people',t('tabPeople')]];
+  if(S.isAdmin) items.push(['admin','Admin']);
   return `<nav class="tabs">${items.map(([k,l])=>
     `<button data-act="view" data-v="${k}" aria-pressed="${S.view===k}">${l}</button>`).join('')}</nav>`;
 }
@@ -1643,6 +1667,12 @@ function subModalBody(){
   </div></div>`;
 }
 function openSubModal(){ S.subModal=true; openModal(subModalBody()); }
+/* Data pre admin obrazovku tahame az ked na nu clovek klikne. */
+async function loadAdmin(){
+  try{ S.adminRows = await DB.adminPrehlad(); }
+  catch(err){ S.adminRows = []; dbErr(err); }
+  if(S.view==='admin') render();
+}
 /* Stripe (checkout + billing portal) je odpojeny — predplatne sa plati
    prevodom na ucet a datum posuva majitel appky rucne. */
 /* ---------- POZNÁMKY (naklady na objednavky, ulohy s cenou a pod.) ---------- */
@@ -1748,6 +1778,50 @@ function payBlock(){
     </div>
     <button class="btn ghost" data-act="copy-iban" style="margin-top:14px">${t('copyIban')}</button>
     <p class="help" style="margin:12px 0 0">${plan==='rocne'?t('payHintYearly'):t('payHintMonthly')}</p>
+  </div>`;
+}
+/* ---------- ADMIN: prehlad predplatnych vsetkych firiem ----------
+   Vidi ho len majitel appky. Data aj zapis strazi Supabase (je_admin). */
+function viewAdmin(){
+  if(S.adminRows===null){
+    return `<div class="panel"><div class="eyebrow">${'Admin'}</div>
+      <p class="help" style="margin:10px 0 0">${'Načítavam\u2026'}</p></div>`;
+  }
+  if(!S.adminRows.length){
+    return `<div class="panel"><div class="eyebrow">${'Admin'}</div>
+      <p class="help" style="margin:10px 0 0">${'Zatiaľ tu nie je ani jedna firma.'}</p></div>`;
+  }
+  const rows = S.adminRows.map(r=>{
+    const dni = (r.dni===null||r.dni===undefined) ? null : Number(r.dni);
+    let stav, farba;
+    if(dni===null){ stav='bez obmedzenia'; farba=''; }
+    else if(dni<-GRACE_DAYS){ stav=t('lockedTitle'); farba='color:#e08076'; }
+    else if(dni<0){ stav=t('subOverdue'); farba='color:var(--brass)'; }
+    else if(dni<=RENEW_WARN_DAYS){ stav=dni+' '+dayWord(dni); farba='color:var(--brass)'; }
+    else { stav=dni+' '+dayWord(dni); farba=''; }
+    return `<tr>
+      <td><b>${esc(r.kod||'\u2013')}</b></td>
+      <td>${esc(r.email||'\u2013')}</td>
+      <td>${r.plati_do?esc(fmtDay(r.plati_do)):'\u2013'}</td>
+      <td style="${farba}">${esc(stav)}</td>
+      <td>${r.typ==='rocne'?t('payYearly'):t('payMonthly')}</td>
+      <td>${r.pocet_ludi} / ${r.limit_ludi}</td>
+      <td style="text-align:right;white-space:nowrap">
+        <button class="sr-edit" data-act="admin-add" data-kod="${esc(r.kod)}" data-typ="mesacne"${S.adminBusy?' disabled':''}>${'+1 mesiac'}</button>
+        <button class="sr-edit" data-act="admin-add" data-kod="${esc(r.kod)}" data-typ="rocne"${S.adminBusy?' disabled':''}>${'+1 rok'}</button>
+      </td></tr>`;
+  }).join('');
+  return `<div class="panel">
+    <div class="plan-row" style="margin-bottom:12px">
+      <div class="eyebrow">${'Admin'}</div>
+      <button class="linkish" data-act="admin-reload"${S.adminBusy?' disabled':''}>${'Obnoviť'}</button>
+    </div>
+    <p class="help" style="margin:0 0 12px">${'Kód firmy je to, čo ti príde v poznámke pri platbe. Predĺženie sa počíta od dnešného dňa, alebo od konca predplatného, ak ešte platí.'}</p>
+    <div style="overflow-x:auto"><table>
+      <thead><tr><th>Kód</th><th>E-mail vlastníka</th><th>Platí do</th>
+        <th>Zostáva</th><th>Typ</th><th>Ľudí</th><th></th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
   </div>`;
 }
 /* ---------- velke upozornenie po vyprsani predplatneho ---------- */
@@ -2100,7 +2174,8 @@ document.addEventListener('click',async ev=>{
       }
       break;
     }
-    case 'view': S.view=el.dataset.v; render(); break;
+    case 'view': S.view=el.dataset.v;
+      if(S.view==='admin' && S.adminRows===null) loadAdmin(); render(); break;
     case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
                   S.calPick=null; render(); break;
@@ -2301,6 +2376,20 @@ document.addEventListener('click',async ev=>{
       }catch(err){
         S.loginErr=t('joinBadCode'); render();
       }
+      break;
+    }
+    case 'admin-reload': S.adminRows=null; render(); loadAdmin(); break;
+    case 'admin-add': {
+      const kod=el.dataset.kod, typ=el.dataset.typ;
+      if(!confirm('Predĺžiť predplatné firme '+kod+' o '+(typ==='rocne'?'jeden rok':'jeden mesiac')+'?')) break;
+      S.adminBusy=true; render();
+      try{
+        const res=await DB.adminPredlz(kod,typ,1);
+        const novy=(res&&res[0]&&res[0].plati_do)||null;
+        toast(kod+' \u2013 platí do '+(novy?fmtDay(novy):'?'));
+        if(kod===S.inviteCode && novy){ S.platneDo=novy; S.typPredplatneho=typ; }
+      }catch(err){ dbErr(err); }
+      S.adminBusy=false; S.adminRows=null; render(); loadAdmin();
       break;
     }
     case 'pay-plan': S.payPlan=el.dataset.v;
