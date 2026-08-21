@@ -424,6 +424,9 @@ body.locked{overflow:hidden}
   background:var(--bone);color:var(--ink);padding:10px 16px;border-radius:var(--r);
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;
   max-width:90vw;text-align:center}
+.paygrid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:15px;align-items:baseline}
+.paygrid span{color:var(--bone-dim)}
+.paygrid b{word-break:break-word}
 </style>
 </head>
 <body>
@@ -459,6 +462,11 @@ const PLAN_TIERS = [
   {key:'t100',upTo:100, price:70},
   {key:'t999',upTo:Infinity, price:120}
 ];
+/* Manualne predplatne — bankovy prevod. Rocne = 10x mesacne (2 mesiace zadarmo). */
+const PAY_RECIPIENT = 'Filip Lazúr';
+const PAY_IBAN = 'SK31 1100 0000 0029 3681 6081';
+const YEAR_MONTHS = 10;
+const RENEW_WARN_DAYS = 7;   // od kolkych dni pred koncom zacneme upozornovat
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
 const CONTACT_PHONE = '+421917294556';
 const CONTACT_PHONE_DISPLAY = '+421 917 294 556';
@@ -540,7 +548,8 @@ const S = {
   peopleLimit:3,        // kolko zamestnancov moze mat na svojom pláne (Free = 3)
   billingBusy:false,    // prebieha presmerovanie na Stripe (checkout/portal) — zabranuje dvojkliku
   platneDo:null,        // datum, do ktoreho je predplatne zaplatene (YYYY-MM-DD); null = bez obmedzenia
-  typPredplatneho:'mesacne'  // 'mesacne' | 'rocne'
+  typPredplatneho:'mesacne', // 'mesacne' | 'rocne' — co ma clovek nastavene v DB
+  payPlan:null          // co si prave prezera v platobnom paneli (null = podla DB)
 };
 const t = k => T[S.lang][k];
 
@@ -554,6 +563,33 @@ function isLocked(dateStr){
   const d = (dateStr===undefined ? S.platneDo : dateStr);
   if(!d) return false;
   return String(d).slice(0,10) < todayISO();
+}
+/* Suma podla poctu ludi, ktory ma firma zaplateny (people_limit). */
+function subPrice(){
+  const lim = S.peopleLimit||3;
+  const tier = PLAN_TIERS.find(x=>lim<=x.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
+  return (tier && typeof tier.price==='number') ? tier.price : null;
+}
+/* Kolko dni zostava do konca predplatneho. Zaporne = uz vyprsalo. */
+function subDaysLeft(){
+  if(!S.platneDo) return null;
+  const end = new Date(String(S.platneDo).slice(0,10)+'T00:00:00');
+  const now = new Date(todayISO()+'T00:00:00');
+  return Math.round((end-now)/86400000);
+}
+/* Spravny tvar slova "den" podla cisla — sk: 1 den, 2 dni, 5 dni. */
+function dayWord(n){
+  const loc=(T[S.lang]&&T[S.lang].locale)||'sk-SK';
+  const f=(T[S.lang]&&T[S.lang].dayForms)||{};
+  let k='other';
+  try{ k=new Intl.PluralRules(loc).select(n); }catch(e){}
+  return f[k]||f.other||'';
+}
+function fmtDay(dstr){
+  if(!dstr) return '';
+  const loc=(T[S.lang]&&T[S.lang].locale)||'sk-SK';
+  return new Date(String(dstr).slice(0,10)+'T00:00:00')
+    .toLocaleDateString(loc,{day:'numeric',month:'long',year:'numeric'});
 }
 function mondayOf(d){const x=new Date(d);const w=(x.getDay()+6)%7;x.setDate(x.getDate()-w);x.setHours(0,0,0,0);return x}
 function startOfMonth(d){return new Date(d.getFullYear(),d.getMonth(),1)}
@@ -1478,6 +1514,12 @@ function loginInfo(e){
 
 function planPanel(){
   const n=S.employees.length, lim=S.peopleLimit||3;
+  /* Dokedy plati predplatne. Ked sa blizi koniec, rovno ukazeme aj cislo uctu. */
+  const dl = subDaysLeft();
+  const warn = (dl!==null && dl<=RENEW_WARN_DAYS);
+  const subLine = !S.platneDo ? '' : (warn
+    ? `<p class="help" style="margin:10px 0 0;color:var(--brass)">${dl<=0?t('subEndsToday'):t('subEndsIn').replace('{n}',dl).replace('{d}',dayWord(dl))}</p>`
+    : `<p class="help" style="margin:10px 0 0">${t('subUntil')} <b>${esc(fmtDay(S.platneDo))}</b> \u00b7 ${S.typPredplatneho==='rocne'?t('payYearly'):t('payMonthly')}</p>`);
   const tier=PLAN_TIERS.find(t2=>n<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
   const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
   const priceLabel = curTier.price===0 ? t('planFreeShort') : (curTier.price==null ? t('planCustomShort') : curTier.price+' €/'+t('perMonth'));
@@ -1495,7 +1537,8 @@ function planPanel(){
       </div>
     </div>
     ${atLimit?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('limitWarn')}</p>`:''}
-  </div>`;
+    ${subLine}
+  </div>`+(warn?payBlock():'');
 }
 function pricingModalBody(reached){
   const n=S.employees.length, lim=S.peopleLimit||3;
@@ -1668,8 +1711,37 @@ function viewPeople(){
         <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
     ${supportPanel()}`;
 }
+/* ---------- platobne udaje pre vlastnika ---------- */
+/* Zamestnanec toto NIKDY nevidi — predplatne neplati on a emp_me mu ani
+   nevracia people_limit, takze by videl nespravnu sumu. */
+function payBlock(){
+  const monthly = subPrice();
+  const plan = S.payPlan || S.typPredplatneho || 'mesacne';
+  const yearly = (monthly==null) ? null : monthly*YEAR_MONTHS;
+  const amount = plan==='rocne' ? yearly : monthly;
+  const note = S.inviteCode || '';
+  const amountLbl = (amount==null) ? t('planCustomShort')
+    : money(amount)+' / '+(plan==='rocne'?t('perYear'):t('perMonth'));
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('payHow')}</div>
+    <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+      <button data-act="pay-plan" data-v="mesacne" aria-pressed="${plan!=='rocne'}">${t('payMonthly')}</button>
+      <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}</button>
+    </div>
+    ${plan==='rocne'?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
+    <div class="paygrid">
+      <span>${t('payRecipient')}</span><b>${esc(PAY_RECIPIENT)}</b>
+      <span>${t('payIban')}</span><b>${esc(PAY_IBAN)}</b>
+      <span>${t('payAmount')}</span><b>${esc(amountLbl)}</b>
+      ${note?`<span>${t('payNote')}</span><b>${esc(note)}</b>`:''}
+    </div>
+    <button class="btn ghost" data-act="copy-iban" style="margin-top:14px">${t('copyIban')}</button>
+    <p class="help" style="margin:12px 0 0">${plan==='rocne'?t('payHintYearly'):t('payHintMonthly')}</p>
+  </div>`;
+}
 /* ---------- zamknuta appka: predplatne vyprsalo ---------- */
 function viewLocked(){
+  const owner = S.role==='owner';
   return `<div class="login">
     <div>
       <div class="logo">turno<b>.app</b></div>
@@ -1677,7 +1749,11 @@ function viewLocked(){
     </div>
     <div class="panel">
       <div class="eyebrow" style="margin-bottom:10px">🔒 ${t('lockedTitle')}</div>
-      <p class="help" style="margin:0 0 12px">${t('lockedBody')}</p>
+      <p class="help" style="margin:0">${owner?t('lockedBody'):t('lockedEmpBody')}</p>
+    </div>
+    ${owner?payBlock():''}
+    <div class="panel">
+      <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
       <div class="support-row">
         <a class="btn ghost" href="tel:${CONTACT_PHONE}">📞 ${CONTACT_PHONE_DISPLAY}</a>
         <a class="btn ghost" href="mailto:${CONTACT_EMAIL}">✉ ${t('supportEmail')}</a>
@@ -2209,6 +2285,13 @@ document.addEventListener('click',async ev=>{
       }catch(err){
         S.loginErr=t('joinBadCode'); render();
       }
+      break;
+    }
+    case 'pay-plan': S.payPlan=el.dataset.v; render(); break;
+    case 'copy-iban': {
+      const val = PAY_IBAN.replace(/\s+/g,'');
+      try{ await navigator.clipboard.writeText(val); toast(t('ibanCopied')); }
+      catch(e){ toast(t('ibanCopied')); }
       break;
     }
     case 'copy-invite': {
