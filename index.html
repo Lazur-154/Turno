@@ -605,6 +605,9 @@ function setLang(code){
 }
 
 /* ---------------- state ---------------- */
+/* Kluc, pod ktorym drzime prihlasovaci kod zamestnanca v localStorage,
+   aby ho refresh / potiahnutie zhora neodhlasilo (viz boot() a signin-emp). */
+const EMP_CODE_KEY = 'turno_emp_code';
 const S = {
   lang:'sk',   // prepise sa z adresy pri starte
   view:'today',
@@ -1670,7 +1673,10 @@ function viewCal(){
     </div>
     ${detail}
     <div class="panel" style="margin-top:18px">
-      <div class="eyebrow" style="margin-bottom:10px">${t('monthTotal')}</div>
+      <div class="sec-head" style="margin:0 0 10px">
+        <div class="eyebrow" style="margin:0">${t('monthTotal')}</div>
+        ${rows.length?`<button class="linkish" data-act="export-csv">⬇ ${t('exportCsvBtn')}</button>`:''}
+      </div>
       ${rows.length?`<table>
         <thead><tr><th>${t('person')}</th><th>${t('hours')}</th><th>€/h</th><th>${t('cost')}</th></tr></thead>
         <tbody>${rows.map(r=>`<tr>
@@ -1705,6 +1711,72 @@ function dayDetail(key){
       <th>${t('breaksLbl')}</th><th>${t('hours')}</th><th>${t('cost')}</th><th></th></tr></thead>
       <tbody>${body}<tr class="sum"><td>${t('total')}</td><td></td><td></td><td></td>
       <td>${num(sh,1)}</td><td>${money(sc)}</td><td></td></tr></tbody></table></div>`;
+}
+
+/* ---------- EXPORT PRE MZDY ----------
+   CSV so strojcek (nie kniznica) — otvara sa priamo v Exceli. Oddelovac ';'
+   a desatinna ciarka, lebo tak caka Excel v slovenskom nastaveni; inak by
+   po dvojkliku rozhadzal cisla do jedneho stlpca. */
+function csvVal(v){
+  const s=String(v??'');
+  return /[;"\n]/.test(s) ? '"'+s.replace(/"/g,'""')+'"' : s;
+}
+function csvLine(arr){ return arr.map(csvVal).join(';'); }
+function downloadTextFile(filename, content){
+  const blob=new Blob(['﻿'+content], {type:'text/csv;charset=utf-8;'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download=filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 1000);
+}
+/* Export za mesiac, ktory je prave otvoreny v Kalendari (S.calCursor):
+   detail kazdej zmeny + mesacny suhrn na konci, presne to, co uctovnicka
+   potrebuje na spracovanie miezd. */
+function exportMonthCsv(){
+  const c=S.calCursor, y=c.getFullYear(), m=c.getMonth();
+  const inMonth = S.shifts
+    .map(s=>({s, e:empById(s.employee_id)}))
+    .filter(x=>{
+      if(!x.e) return false;
+      const d=new Date(x.s.date+'T00:00:00');
+      return d.getFullYear()===y && d.getMonth()===m;
+    })
+    .sort((a,b)=> a.e.name.localeCompare(b.e.name,'sk') || a.s.date.localeCompare(b.s.date));
+
+  const lines=[];
+  lines.push(csvLine(['Meno','Dátum','Príchod','Odchod','Prestávka (h)','Odpracované (h)','Sadzba (€/h)','Suma (€)']));
+  inMonth.forEach(({s,e})=>{
+    const h=hoursOf(s), br=breakHoursOf(s), rate=+e.hourly_rate||0;
+    const dd=new Date(s.date+'T00:00:00');
+    lines.push(csvLine([
+      e.name,
+      pad(dd.getDate())+'.'+pad(dd.getMonth()+1)+'.'+dd.getFullYear(),
+      hhmm(s.arrival),
+      s.departure ? hhmm(s.departure) : '',
+      num(br,2), num(h,2), num(rate,2), num(h*rate,2)
+    ]));
+  });
+
+  lines.push('');
+  lines.push(csvLine(['SÚHRN ZA MESIAC '+(m+1)+'/'+y]));
+  lines.push(csvLine(['Meno','Odpracované (h)','Suma (€)']));
+  let sumH=0, sumC=0;
+  S.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'sk')).forEach(e=>{
+    let h=0;
+    S.shifts.forEach(s=>{
+      if(s.employee_id!==e.id) return;
+      const dd=new Date(s.date+'T00:00:00');
+      if(dd.getFullYear()===y && dd.getMonth()===m) h+=hoursOf(s);
+    });
+    if(h<=0) return;
+    const c2=h*(+e.hourly_rate||0);
+    sumH+=h; sumC+=c2;
+    lines.push(csvLine([e.name, num(h,2), num(c2,2)]));
+  });
+  lines.push(csvLine(['Spolu', num(sumH,2), num(sumC,2)]));
+
+  downloadTextFile('turno-mzdy-'+y+'-'+pad(m+1)+'.csv', lines.join('\r\n'));
 }
 
 /* ---------- ĽUDIA ---------- */
@@ -2422,6 +2494,7 @@ document.addEventListener('click',async ev=>{
     }
     case 'view': S.view=el.dataset.v;
       if(S.view==='admin' && S.adminRows===null) loadAdmin(); render(); break;
+    case 'export-csv': exportMonthCsv(); break;
     case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
                   S.calPick=null; render(); break;
@@ -2629,6 +2702,7 @@ document.addEventListener('click',async ev=>{
         S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
         S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
         S.role='employee'; S.loginErr='';
+        try{ localStorage.setItem(EMP_CODE_KEY, res.access_code); }catch(e){}
         clearJoinFromUrl();
         render();
       }catch(err){
@@ -2756,9 +2830,14 @@ document.addEventListener('click',async ev=>{
       S.employees=[me]; S.me=me; S.myCode=code; S.platneDo=me.platne_do||null;
       S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
       S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
-      S.role='employee'; S.loginErr=''; render(); break;
+      S.role='employee'; S.loginErr='';
+      try{ localStorage.setItem(EMP_CODE_KEY, code); }catch(e){}
+      render(); break;
     }
-    case 'signout': await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; render(); break;
+    case 'signout':
+      await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null;
+      try{ localStorage.removeItem(EMP_CODE_KEY); }catch(e){}
+      render(); break;
 
     case 'punch-in': {
       const id=el.dataset.id;
@@ -2997,6 +3076,32 @@ setInterval(()=>{
         S.role='owner';
       }
     }catch(e){console.warn(e)}
+    /* Zamestnanec sa neprihlasuje cez Supabase Auth, len kodom, takze DB.session()
+       o nom nic nevie. Bez tejto obnovy ho kazdy refresh / potiahnutie zhora
+       odhlasi (viz TURNO-stav.md, bod "odhlasovanie po obnoveni stranky"). */
+    if(!S.role){
+      let savedCode=null;
+      try{ savedCode=localStorage.getItem(EMP_CODE_KEY); }catch(e){}
+      if(savedCode){
+        try{
+          const me=await DB.employeeByCode(savedCode);
+          if(me){
+            try{ S.shifts=await DB.employeeShifts(savedCode); }catch(e2){ S.shifts=[]; }
+            S.employees=[me]; S.me=me; S.myCode=savedCode; S.platneDo=me.platne_do||null;
+            S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
+            S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
+            S.role='employee';
+          }else{
+            /* kod uz neplati (napr. zamestnanca vlastnik zmazal) */
+            try{ localStorage.removeItem(EMP_CODE_KEY); }catch(e2){}
+          }
+        }catch(e){
+          /* vypadok siete pri starte — kod v localStorage nechavame,
+             skusi sa znova pri buduc otvoreni, clovek neprisiel o prihlasenie */
+          console.warn(e);
+        }
+      }
+    }
   }
   render();
   /* Navrat zo Stripe Checkoutu/portálu — webhook, ktory realne aktualizuje
@@ -3028,7 +3133,13 @@ setInterval(()=>{
     if(document.visibilityState==='visible' && LIVE && sb && S.role==='owner'){
       try{
         const {data}=await sb.auth.getSession();
-        if(!data.session){ S.role=null; S.loginErr=''; render(); }
+        if(data.session) return;
+        /* Prve overenie po prebudeni telefonu casto zlyha samo o sebe
+           (Supabase klient este nestihol obnovit token) — kym vlastnika
+           odhlasime, skusime to este raz o chvilu neskor. */
+        await new Promise(r=>setTimeout(r,1500));
+        const {data:data2}=await sb.auth.getSession();
+        if(!data2.session){ S.role=null; S.loginErr=''; render(); }
       }catch(e){}
     }
   });
