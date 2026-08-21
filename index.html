@@ -571,6 +571,16 @@ function clearQrFromUrl(){
     history.replaceState(null,'',u);
   }catch(e){}
 }
+/* Skener v prevadzke vedie na ...?stanica=TOKEN — hocijake zariadenie s
+   kamerou (mobil, tablet, stary telefon), ktore ostane pri vchode. Neriesi
+   prihlasenie vobec, len skenuje osobne QR kody zamestnancov. */
+function stationTokenFromUrl(){
+  try{
+    const v=new URLSearchParams(location.search).get('stanica');
+    if(v) return v;
+  }catch(e){}
+  return null;
+}
 function joinCodeFromUrl(){
   try{ return new URLSearchParams(location.search).get('join'); }catch(e){ return null; }
 }
@@ -651,7 +661,10 @@ const S = {
   qrToken:null,         // tajny kod z QR plagatu (vlastnik ho vidi, zamestnanec skenuje)
   qrScanned:null,       // token z adresy ?qr=... pri tomto otvoreni appky
   geoBusy:false,
-  showQR:false          // je rozbaleny plagat s QR kodom?
+  showQR:false,          // je rozbaleny plagat s QR kodom?
+  stationToken:null,     // ?stanica=TOKEN — appka bezi ako skener, ziadne prihlasenie
+  stationMsg:null,       // {ok, text} — posledny vysledok skenovania (docasne hlasenie)
+  stationErr:null        // chyba pri spustani kamery ('denied' | 'missing' | null)
 };
 const t = k => T[S.lang][k];
 
@@ -1135,6 +1148,46 @@ const DB = {
     return data||null;
   },
 
+  /* Skener v prevadzke: appka sa sama rozhodne, ci ide o prichod alebo
+     odchod (podla toho, ci ma clovek dnes uz otvorenu zmenu) — na stanici
+     sa nekliká, len sa prilozi osobny QR kod. */
+  async empPunchStation(code, stationToken){
+    if(!LIVE){
+      const me=MEM.employees.find(e=>String(e.access_code)===code);
+      if(!me) throw new Error('zly_kod');
+      const CUTOFF_MS=90*60000;
+      const open=MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival&&!x.departure);
+      const nowIso=new Date().toISOString(), nowMs=Date.now();
+      if(!open){
+        const sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+                  plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+        MEM.shifts.push(sh);
+        return {action:'in', name:me.name, shift:sh};
+      }
+      const list=Array.isArray(open.breaks)?open.breaks.slice():[];
+      const last=list.length?list[list.length-1]:null;
+      const openBrk=last&&!last.e;
+      if(!openBrk){
+        // pracuje => odchod/prestavka
+        list.push({s:nowIso,e:null}); open.breaks=list;
+        return {action:'break', name:me.name, shift:open};
+      }
+      const lastS=new Date(last.s).getTime();
+      if(nowMs-lastS<=CUTOFF_MS){
+        list[list.length-1]={...last,e:nowIso}; open.breaks=list;
+        return {action:'back', name:me.name, shift:open};
+      }
+      // prekrocil limit => stara zmena sa uzavrela, zacina nova
+      open.departure=new Date(lastS+CUTOFF_MS).toISOString();
+      const sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+                plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+      MEM.shifts.push(sh);
+      return {action:'in', name:me.name, shift:sh};
+    }
+    const data = await sbop(()=>sb.rpc('emp_punch_station',{p_code:code, p_station:stationToken}));
+    return data||null;
+  },
+
   async employeeShifts(code){
     if(!LIVE) {
       const me=MEM.employees.find(e=>String(e.access_code)===code);
@@ -1244,6 +1297,7 @@ const root=document.getElementById('root');
 const modalHost=document.getElementById('modal');
 
 function render(){
+  if(S.stationToken){ root.innerHTML=viewStation(); return; }
   if(!S.role){ root.innerHTML=viewLogin(); return; }
   setTimeout(()=>{ if(S.showQR && S.view==='people') drawQR(); },0);
   const st = subState();
@@ -1949,14 +2003,17 @@ function viewPeople(){
   const plan=planPanel();
   const mode=`<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('whoRecords')}</div>
-    <div class="presets" style="grid-template-columns:1fr 1fr">
+    <div class="presets" style="grid-template-columns:1fr 1fr 1fr">
       <button data-act="mode" data-v="owner" aria-pressed="${S.punchMode==='owner'}">${t('modeOwner')}</button>
       <button data-act="mode" data-v="self" aria-pressed="${S.punchMode==='self'}">${t('modeSelf')}</button>
+      <button data-act="mode" data-v="stanica" aria-pressed="${S.punchMode==='stanica'}">${t('modeStation')}</button>
     </div>
     <p class="help" style="margin:10px 0 0">${t('modeHint')}</p>
+    <p class="help" style="margin:6px 0 0">${t('modeStationHint')}</p>
   </div>`;
   const geo = geoPanel();
   const qr = qrPanel();
+  const station = stationPanel();
   const link = S.inviteCode
     ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
   const invite = `<div class="panel" style="margin-bottom:18px">
@@ -1968,7 +2025,7 @@ function viewPeople(){
     </div>
     <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
   </div>`;
-  return plan+mode+geo+qr+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
+  return plan+mode+geo+qr+station+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
     <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
     ${S.employees.length?S.employees.map(e=>`
       <div class="person">
@@ -2159,6 +2216,152 @@ function drawQR(){
   sc.onerror=()=>{ box.textContent=url; };
   document.head.appendChild(sc);
 }
+/* ---------- vlastnik: skener v prevadzke (tablet/mobil/hocico s kamerou) ---------- */
+function stationPanel(){
+  const url = S.qrToken ? `${location.origin}${location.pathname}?stanica=${encodeURIComponent(S.qrToken)}` : '';
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('stationTitle')}</div>
+    <p class="help" style="margin:0 0 12px">${t('stationHint')}</p>
+    ${url?`<div class="support-row">
+        <a class="btn ghost" href="${esc(url)}" target="_blank" rel="noopener">${t('stationOpenBtn')}</a>
+      </div>
+      <input class="mono" readonly value="${esc(url)}" style="padding:10px;margin-top:10px;width:100%;font-size:12px">`
+      :''}
+  </div>`;
+}
+
+/* ---------- zamestnanec: vlastny QR kod (ukaze ho skeneru v prevadzke) ---------- */
+function myQrModalBody(){
+  return `<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('myQrTitle')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <p class="help" style="margin:0 0 14px">${t('myQrHint')}</p>
+    <div style="background:#fff;padding:18px;border-radius:14px;text-align:center">
+      <div id="my-qr-img" style="min-height:180px"></div>
+    </div>
+    <div class="sheet-act"><button class="btn ghost" data-act="close">${t('close')||t('cancel')}</button></div>
+  </div></div>`;
+}
+function drawMyQR(){
+  const box=document.getElementById('my-qr-img');
+  if(!box||!S.myCode) return;
+  const payload='TURNO-EMP:'+S.myCode;
+  const go=()=>{
+    try{
+      const q=window.qrcode(0,'M'); q.addData(payload); q.make();
+      box.innerHTML=q.createSvgTag({cellSize:5, margin:0, scalable:true});
+      const svg=box.querySelector('svg');
+      if(svg){ svg.style.width='100%'; svg.style.maxWidth='260px'; svg.style.height='auto'; }
+    }catch(e){ box.textContent=S.myCode; }
+  };
+  if(window.qrcode) return go();
+  const sc=document.createElement('script');
+  sc.src='qr.js';
+  sc.onload=go;
+  sc.onerror=()=>{ box.textContent=S.myCode; };
+  document.head.appendChild(sc);
+}
+
+/* ---------- STANICA (skener v prevadzke) ----------
+   Ziadne prihlasenie, ziadny S.role — hocijake zariadenie s kamerou, ktore
+   ostane pri vchode. Po nacitani appka SAMA rozhodne, ci ide o prichod
+   alebo odchod (podla toho, ci ma clovek dnes uz otvorenu zmenu). */
+function viewStation(){
+  return `<div style="position:fixed;inset:0;background:#000;overflow:hidden">
+    <video id="station-video" autoplay playsinline muted
+      style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
+    <canvas id="station-canvas" style="display:none"></canvas>
+    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none">
+      <div style="width:min(72vw,320px);aspect-ratio:1;border:3px solid rgba(236,234,225,.55);
+        border-radius:20px;box-shadow:0 0 0 2000px rgba(0,0,0,.35)"></div>
+    </div>
+    <div style="position:absolute;top:24px;left:0;right:0;text-align:center;color:var(--bone);
+      font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;font-weight:700;
+      font-size:20px;text-shadow:0 1px 4px rgba(0,0,0,.6)">turn<b style="color:var(--brass)">o</b></div>
+    <div id="station-status" style="position:absolute;bottom:40px;left:16px;right:16px;text-align:center;
+      font-size:19px;font-weight:600;color:var(--bone);text-shadow:0 1px 4px rgba(0,0,0,.7)">${esc(t('stationReady'))}</div>
+  </div>`;
+}
+function stationSetMsg(text, tone){
+  const el=document.getElementById('station-status');
+  if(!el) return;
+  el.textContent=text;
+  el.style.color = tone==='ok' ? 'var(--verdigris)' : tone==='err' ? 'var(--rust)' : 'var(--bone)';
+}
+function loadScriptOnce(src){
+  return new Promise(res=>{
+    if(document.querySelector('script[data-src="'+src+'"]')){ res(); return; }
+    const sc=document.createElement('script');
+    sc.src=src; sc.dataset.src=src;
+    sc.onload=()=>res(); sc.onerror=()=>res();
+    document.head.appendChild(sc);
+  });
+}
+let stationBusy=false, stationLastTick=0;
+async function startStation(){
+  const video=document.getElementById('station-video');
+  if(!video) return;
+  let stream;
+  try{
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
+  }catch(e){
+    stationSetMsg((e&&e.name==='NotFoundError')?t('stationCamMissing'):t('stationCamDenied'), 'err');
+    return;
+  }
+  video.srcObject=stream;
+  try{ await video.play(); }catch(e){}
+
+  /* Chrome/Android maju rychlu vstavanu citacku (BarcodeDetector). iOS Safari
+     ju nema, tam pouzijeme jsQR (dotiahneme az teraz, aby to nezatazovalo
+     appku, ked skener nikto nepouziva). */
+  let detector=null;
+  if('BarcodeDetector' in window){
+    try{ detector=new window.BarcodeDetector({formats:['qr_code']}); }catch(e){ detector=null; }
+  }
+  if(!detector) await loadScriptOnce('jsqr.js');
+
+  const canvas=document.getElementById('station-canvas');
+  const ctx=canvas.getContext('2d',{willReadFrequently:true});
+
+  async function tick(now){
+    if(!stationBusy && video.readyState>=2 && (now-stationLastTick)>180){
+      stationLastTick=now;
+      try{
+        let code=null;
+        if(detector){
+          const codes=await detector.detect(video);
+          if(codes&&codes.length) code=codes[0].rawValue;
+        }else if(window.jsQR && video.videoWidth){
+          canvas.width=video.videoWidth; canvas.height=video.videoHeight;
+          ctx.drawImage(video,0,0,canvas.width,canvas.height);
+          const img=ctx.getImageData(0,0,canvas.width,canvas.height);
+          const res=window.jsQR(img.data,img.width,img.height);
+          if(res) code=res.data;
+        }
+        if(code) handleStationCode(code);
+      }catch(e){}
+    }
+    requestAnimationFrame(tick);
+  }
+  requestAnimationFrame(tick);
+}
+async function handleStationCode(raw){
+  const m=/^TURNO-EMP:(.+)$/.exec(String(raw||'').trim());
+  if(!m) return;
+  stationBusy=true;
+  stationSetMsg('…', null);
+  try{
+    const r=await DB.empPunchStation(m[1], S.stationToken);
+    if(!r) throw new Error('zly_kod');
+    const label = r.action==='in' ? t('arrive') : r.action==='break' ? t('breakStart') : t('breakEnd');
+    stationSetMsg((r.name?r.name+' — ':'')+label+' ✓', 'ok');
+  }catch(e){
+    const msg=String((e&&e.message)||'');
+    stationSetMsg(msg.indexOf('zla_stanica')>=0 ? t('stationBadStation') : t('stationBadCode'), 'err');
+  }
+  setTimeout(()=>{ stationBusy=false; stationSetMsg(t('stationReady'), null); }, 3500);
+}
+
 function supportPanel(){
   return `<div class="panel" style="margin-top:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
@@ -2220,7 +2423,9 @@ function viewMine(){
   const today=all.filter(s=>s.date===todayISO())
     .sort((a,b)=>(a.plan_start||'').localeCompare(b.plan_start||''));
   let todayBlock;
-  if(S.punchMode!=='self'){
+  if(S.punchMode==='stanica'){
+    todayBlock=`<p class="plainline quiet">${t('stationModeNote')}</p>`;
+  }else if(S.punchMode!=='self'){
     todayBlock=`<p class="plainline quiet">${t('readOnlyNote')}</p>`;
   }else if(today.length){
     todayBlock=`<div class="cards" style="margin-bottom:20px">${today.map(myCard).join('')}</div>`;
@@ -2239,6 +2444,7 @@ function viewMine(){
       <div><div class="k">${cur()}/${t('hUnit')}</div><div class="v">${num(+me.hourly_rate||0,2)}</div></div>
       <div><div class="k">${t('gross')}</div><div class="v money">${money(h*(+me.hourly_rate||0))}</div></div>
     </div>
+    <button class="linkish" style="margin-bottom:16px" data-act="my-qr">▦ ${t('myQrBtn')}</button>
     ${todayBlock}
     ${bh>0?`<p class="plainline quiet">${t('breakTotal')}: ${durLong(bh)}</p>`:''}
     <div class="sec-head"><h2>${t('myShifts')} \u00b7 ${T[S.lang].months[m]}</h2></div>
@@ -2467,7 +2673,7 @@ document.addEventListener('keydown',ev=>{
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
   'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
-  'qr-toggle','qr-copy','qr-print'];
+  'qr-toggle','qr-copy','qr-print','my-qr'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
@@ -2495,6 +2701,7 @@ document.addEventListener('click',async ev=>{
     case 'view': S.view=el.dataset.v;
       if(S.view==='admin' && S.adminRows===null) loadAdmin(); render(); break;
     case 'export-csv': exportMonthCsv(); break;
+    case 'my-qr': openModal(myQrModalBody()); setTimeout(drawMyQR,0); break;
     case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
                   S.calPick=null; render(); break;
@@ -3061,6 +3268,9 @@ setInterval(()=>{
 /* ---------- boot ---------- */
 (async function boot(){
   setLang(langFromUrl());
+  /* Stanica nepotrebuje ziadne prihlasenie, ide rovno do skenera. */
+  S.stationToken=stationTokenFromUrl();
+  if(S.stationToken){ render(); startStation(); return; }
   const jc=joinCodeFromUrl();
   if(jc){ S.joinCode=jc; S.loginTab='join'; }
   S.qrScanned=qrFromUrl();
