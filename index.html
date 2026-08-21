@@ -555,6 +555,22 @@ function langFromUrl(){
 }
 /* Vlastnik posle novemu clovekovi odkaz s ?join=KOD — appka to spozna
    a rovno mu ukaze "napis meno a pripoj sa" namiesto prihlasenia. */
+/* QR plagat na stene vedie na ...?qr=TOKEN — appka si token zapamata
+   a pouzije ho pri najblizsom pichnuti namiesto GPS. */
+function qrFromUrl(){
+  try{
+    const v=new URLSearchParams(location.search).get('qr');
+    if(v) return v;
+  }catch(e){}
+  return null;
+}
+function clearQrFromUrl(){
+  try{
+    const u=new URL(location.href);
+    u.searchParams.delete('qr');
+    history.replaceState(null,'',u);
+  }catch(e){}
+}
 function joinCodeFromUrl(){
   try{ return new URLSearchParams(location.search).get('join'); }catch(e){ return null; }
 }
@@ -625,7 +641,14 @@ const S = {
   isAdmin:false,        // som majitel appky? (rozhoduje o tom Supabase, toto je len pre zobrazenie)
   adminRows:null,       // prehlad vsetkych firiem pre admin obrazovku
   adminBusy:false,
-  payTier:null          // plan, ktory si clovek vybral v platobnom paneli (null = ten, co ma)
+  payTier:null,         // plan, ktory si clovek vybral v platobnom paneli (null = ten, co ma)
+  geoOn:false,          // plati okruh okolo prevadzky?
+  geoRadius:100,        // polomer v metroch
+  geoLat:null, geoLon:null,
+  qrToken:null,         // tajny kod z QR plagatu (vlastnik ho vidi, zamestnanec skenuje)
+  qrScanned:null,       // token z adresy ?qr=... pri tomto otvoreni appky
+  geoBusy:false,
+  showQR:false          // je rozbaleny plagat s QR kodom?
 };
 const t = k => T[S.lang][k];
 
@@ -633,6 +656,33 @@ const t = k => T[S.lang][k];
 function pad(n){return String(n).padStart(2,'0')}
 function iso(d){return d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate())}
 function todayISO(){return iso(new Date())}
+/* Spyta sa prehliadac na polohu. Vrati null, ked to clovek nepovoli
+   alebo GPS nechyti — volajuci sa potom rozhodne, co dalej. */
+/* Databaza vracia chyby ako kratke kody, tu z nich robime vetu pre cloveka. */
+function punchErr(e){
+  const m = String((e&&e.message)||'');
+  if(m.indexOf('prilis_daleko')>=0){
+    const d = (m.match(/prilis_daleko:(\d+)/)||[])[1];
+    return t('geoTooFar').replace('{m}', d||'?').replace('{r}', S.geoRadius);
+  }
+  if(m.indexOf('poloha_chyba')>=0) return t('geoNoFix');
+  if(m.indexOf('zly_qr')>=0) return t('qrBad');
+  if(m.indexOf('miesto_nenastavene')>=0) return t('geoWarnNoPlace');
+  if(m.indexOf('zly_kod')>=0) return t('badCode');
+  return t('readOnlyNote');
+}
+function getPos(timeoutMs){
+  return new Promise(resolve=>{
+    if(!navigator.geolocation) return resolve(null);
+    let done=false;
+    const t=setTimeout(()=>{ if(!done){ done=true; resolve(null); } }, timeoutMs||12000);
+    navigator.geolocation.getCurrentPosition(
+      pos=>{ if(done)return; done=true; clearTimeout(t);
+             resolve({lat:pos.coords.latitude, lon:pos.coords.longitude, acc:pos.coords.accuracy}); },
+      ()=>{ if(done)return; done=true; clearTimeout(t); resolve(null); },
+      {enableHighAccuracy:true, timeout:timeoutMs||12000, maximumAge:30000});
+  });
+}
 /* Predplatne: ak je platne_do v minulosti, appka sa zamkne.
    Prazdna hodnota = bez obmedzenia (demo, stare ucty). */
 function isLocked(dateStr){
@@ -645,6 +695,21 @@ function isLocked(dateStr){
    'grace'  — uz vyprsalo, ale este GRACE_DAYS dni funguje vsetko + velke upozornenie
    'locked' — odklad dobehol: dochadzka sa neda zapisovat, hodiny a mzdy vidno dalej
               (aby sa dalo dopocitat, komu kolko vyplatit) */
+/* Vsetko, co si appka pamata z nastaveni firmy, na jednom mieste —
+   nech sa pri kazdom novom stlpci nemusi opravovat pat roznych miest. */
+function applySettings(st){
+  if(!st) return;
+  S.punchMode = st.punch_mode || 'owner';
+  S.inviteCode = st.invite_code || null;
+  S.peopleLimit = st.people_limit || 3;
+  S.platneDo = st.platne_do || null;
+  S.typPredplatneho = st.typ_predplatneho || 'mesacne';
+  S.geoOn = !!st.geo_on;
+  S.geoRadius = st.geo_radius || 100;
+  S.geoLat = (st.geo_lat===null||st.geo_lat===undefined) ? null : Number(st.geo_lat);
+  S.geoLon = (st.geo_lon===null||st.geo_lon===undefined) ? null : Number(st.geo_lon);
+  S.qrToken = st.qr_token || null;
+}
 function subState(){
   const dl = subDaysLeft();
   if(dl===null || dl>=0) return 'ok';
@@ -963,12 +1028,12 @@ const DB = {
   },
   /* --- nastavenie, kto zapisuje prichody a pozyvaci kod pre novych ludi --- */
   async loadSettings(){
-    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit, platne_do: null, typ_predplatneho: 'mesacne'};
-    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho').maybeSingle());
+    if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit, platne_do: null, typ_predplatneho: 'mesacne', geo_on:false, geo_radius:100, qr_token:'DEMO'};
+    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_lat, geo_lon, geo_radius, qr_token').maybeSingle());
     if(!data){
       // prvy start: zaloz riadok s predvolenym nastavenim (pozyvaci kod si databaza vygeneruje sama)
       const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:'owner'} : {punch_mode:'owner'};
-      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho').single());
+      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_lat, geo_lon, geo_radius, qr_token').single());
       return ins||{punch_mode:'owner', people_limit:3};
     }
     return data;
@@ -986,6 +1051,11 @@ const DB = {
   },
   async adminNastav(kod, datum, typ){
     return await sbop(()=>sb.rpc('admin_nastav',{p_kod:kod, p_datum:datum, p_typ:typ}));
+  },
+  async saveGeo(patch){
+    if(!LIVE){ Object.assign(MEM.settings, patch); return; }
+    const payload = S.ownerId ? {owner_id:S.ownerId, ...patch} : patch;
+    await sbop(()=>sb.from('settings').upsert(payload,{onConflict:'owner_id'}));
   },
   async savePunchMode(mode){
     if(!LIVE){ MEM.settings.punch_mode=mode; return; }
@@ -1035,7 +1105,7 @@ const DB = {
     return (data&&data[0])||null;
   },
 
-  async empPunch(code, shiftId, action){
+  async empPunch(code, shiftId, action, pos, qr){
     if(!LIVE){
       if(MEM.settings.punch_mode!=='self') throw new Error('not allowed');
       const sh=MEM.shifts.find(x=>x.id===shiftId);
@@ -1055,8 +1125,11 @@ const DB = {
       if(action==='break_end' && open){ list[list.length-1]={...open,e:nowIso}; sh.breaks=list; }
       return sh;
     }
-    const data = await sbop(()=>sb.rpc('emp_punch',{p_code:code,p_shift:shiftId,p_action:action}));
-    return (data&&data[0])||null;
+    const data = await sbop(()=>sb.rpc('emp_punch_geo',{
+      p_code:code, p_shift:shiftId, p_action:action,
+      p_lat:(pos&&pos.lat)??null, p_lon:(pos&&pos.lon)??null,
+      p_acc:(pos&&pos.acc)??null, p_qr:qr||null}));
+    return data||null;
   },
 
   async employeeShifts(code){
@@ -1169,6 +1242,7 @@ const modalHost=document.getElementById('modal');
 
 function render(){
   if(!S.role){ root.innerHTML=viewLogin(); return; }
+  setTimeout(()=>{ if(S.showQR && S.view==='people') drawQR(); },0);
   const st = subState();
   S.readonly = (st==='locked');
   root.innerHTML = `
@@ -1809,6 +1883,8 @@ function viewPeople(){
     </div>
     <p class="help" style="margin:10px 0 0">${t('modeHint')}</p>
   </div>`;
+  const geo = geoPanel();
+  const qr = qrPanel();
   const link = S.inviteCode
     ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
   const invite = `<div class="panel" style="margin-bottom:18px">
@@ -1820,7 +1896,7 @@ function viewPeople(){
     </div>
     <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
   </div>`;
-  return plan+mode+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
+  return plan+mode+geo+qr+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
     <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
     ${S.employees.length?S.employees.map(e=>`
       <div class="person">
@@ -1942,6 +2018,74 @@ function subBanner(st){
     <div class="subwarn-t">${st==='locked'?'\uD83D\uDD12':'\u26A0'} ${esc(title)}</div>
     <p>${body}</p>
   </div>${owner?payBlock():''}`;
+}
+/* ---------- vlastnik: kde stoji prevadzka ---------- */
+function geoPanel(){
+  const mam = (S.geoLat!==null && S.geoLon!==null);
+  const radiusy = [50,100,200,500];
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('geoTitle')}</div>
+    <p class="help" style="margin:0 0 12px">${t('geoHint')}</p>
+    <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+      <button data-act="geo-on" data-v="0" aria-pressed="${!S.geoOn}">${t('geoOff')}</button>
+      <button data-act="geo-on" data-v="1" aria-pressed="${S.geoOn}">${t('geoOnLbl')}</button>
+    </div>
+    <div class="paygrid" style="margin-bottom:12px">
+      <span>${t('geoPlace')}</span><b>${mam?esc(S.geoLat.toFixed(5)+', '+S.geoLon.toFixed(5)):t('geoNotSet')}</b>
+      <span>${t('geoRadius')}</span><b>${S.geoRadius} m</b>
+    </div>
+    <div class="presets" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+      ${radiusy.map(r=>`<button data-act="geo-radius" data-v="${r}" aria-pressed="${S.geoRadius===r}">${r} m</button>`).join('')}
+    </div>
+    <button class="btn ghost" data-act="geo-here"${S.geoBusy?' disabled':''}>${S.geoBusy?t('geoWorking'):t('geoUseHere')}</button>
+    ${S.geoOn&&!mam?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('geoWarnNoPlace')}</p>`:''}
+  </div>`;
+}
+/* ---------- vlastnik: QR plagat na stenu ---------- */
+function qrPanel(){
+  const url = S.qrToken ? `${location.origin}${location.pathname}?qr=${encodeURIComponent(S.qrToken)}` : '';
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="plan-row" style="margin-bottom:10px">
+      <div class="eyebrow">${t('qrTitle')}</div>
+      <button class="linkish" data-act="qr-toggle">${S.showQR?t('qrHide'):t('qrShow')}</button>
+    </div>
+    <p class="help" style="margin:0">${t('qrHint')}</p>
+    ${S.showQR?`
+      <div id="qr-box" style="background:#fff;padding:18px;border-radius:14px;margin-top:14px;text-align:center">
+        <div id="qr-img" style="min-height:180px"></div>
+        <div style="color:#0E2530;font-family:var(--disp);text-transform:uppercase;
+             letter-spacing:.14em;font-weight:700;margin-top:10px">turno</div>
+        <div style="color:#4a6b78;font-size:13px;margin-top:2px">${esc(t('qrPoster'))}</div>
+      </div>
+      <div class="support-row" style="margin-top:12px">
+        <button class="btn ghost" data-act="qr-print">${t('qrPrint')}</button>
+        <button class="btn ghost" data-act="qr-copy">${t('qrCopyLink')}</button>
+      </div>
+      <input id="qr-url" class="mono" readonly value="${esc(url)}" style="padding:10px;margin-top:10px;width:100%;font-size:12px">
+    `:''}
+  </div>`;
+}
+/* QR obrazok kreslime az ked ho vlastnik chce vidiet — kniznicu dotiahneme lenivo. */
+function drawQR(){
+  const box=document.getElementById('qr-img');
+  if(!box||!S.qrToken) return;
+  const url=`${location.origin}${location.pathname}?qr=${encodeURIComponent(S.qrToken)}`;
+  const go=()=>{
+    try{
+      const q=window.qrcode(0,'M'); q.addData(url); q.make();
+      box.innerHTML=q.createSvgTag({cellSize:5, margin:0, scalable:true});
+      const svg=box.querySelector('svg');
+      if(svg){ svg.style.width='100%'; svg.style.maxWidth='260px'; svg.style.height='auto'; }
+    }catch(e){ box.textContent=url; }
+  };
+  if(window.qrcode) return go();
+  /* Kniznicu mame priamo v projekte (qr.js), nie z cudzieho servera —
+     QR kod sa vykresli aj bez internetu a nikto nas nemoze odstrihnut. */
+  const sc=document.createElement('script');
+  sc.src='qr.js';
+  sc.onload=go;
+  sc.onerror=()=>{ box.textContent=url; };
+  document.head.appendChild(sc);
 }
 function supportPanel(){
   return `<div class="panel" style="margin-top:18px">
@@ -2250,7 +2394,8 @@ document.addEventListener('keydown',ev=>{
    ============================================================ */
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
   'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
-  'signin-owner','signin-emp','signup-owner','do-join','demo'];
+  'signin-owner','signin-emp','signup-owner','do-join','demo',
+  'qr-toggle','qr-copy','qr-print'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
@@ -2341,14 +2486,24 @@ document.addEventListener('click',async ev=>{
     case 'my-in': case 'my-out': case 'my-break-start': case 'my-break-end': {
       const map={'my-in':'in','my-out':'out','my-break-start':'break_start','my-break-end':'break_end'};
       const id=el.dataset.id;
+      /* Ked plati okruh a clovek nema QR z plagatu, potrebujeme polohu.
+         Prestavky nechavame bez overovania — clovek uz v praci je. */
+      let pos=null;
+      const treba = S.geoOn && !S.qrScanned && (map[a]==='in' || map[a]==='out');
+      if(treba){
+        el.disabled=true; toast(t('geoLocating'));
+        pos=await getPos();
+        el.disabled=false;
+        if(!pos){ toast(t('geoNoFix')); break; }
+      }
       try{
-        const upd=await DB.empPunch(S.myCode, id, map[a]);
+        const upd=await DB.empPunch(S.myCode, id, map[a], pos, S.qrScanned);
         if(upd){
           const i=S.shifts.findIndex(x=>x.id===id);
           if(i>=0) S.shifts[i]={...S.shifts[i], ...upd};
         }
         S.justStamped=id; render(); S.justStamped=null;
-      }catch(e){ toast(t('readOnlyNote')); }
+      }catch(e){ toast(punchErr(e)); }
       break;
     }
 
@@ -2425,7 +2580,7 @@ document.addEventListener('click',async ev=>{
 
     case 'demo': {
       seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
-      const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne';
+      const st=await DB.loadSettings(); applySettings(st);
       S.role='owner'; S.view='today'; render(); break;
     }
 
@@ -2436,7 +2591,7 @@ document.addEventListener('click',async ev=>{
       try{
         await DB.signIn(email,pass);
         S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne'; }catch(e){}
+        try{ const st=await DB.loadSettings(); applySettings(st); }catch(e){}
         S.role='owner'; S.loginErr=''; render();
       }catch(e){ S.loginErr=t('badLogin'); render(); }
       break;
@@ -2471,6 +2626,8 @@ document.addEventListener('click',async ev=>{
         if(!me) me={id:res.id, name:res.name, hourly_rate:0, access_code:res.access_code};
         try{ S.shifts=await DB.employeeShifts(res.access_code); }catch(e2){ S.shifts=[]; }
         S.employees=[me]; S.me=me; S.myCode=res.access_code; S.platneDo=me.platne_do||null;
+        S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
+        S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
         S.role='employee'; S.loginErr='';
         clearJoinFromUrl();
         render();
@@ -2494,6 +2651,54 @@ document.addEventListener('click',async ev=>{
         if(kod===S.inviteCode) S.peopleLimit=lim;
       }catch(err){ dbErr(err); }
       S.adminBusy=false; S.adminRows=null; render(); loadAdmin();
+      break;
+    }
+    case 'geo-on': {
+      const on = el.dataset.v==='1';
+      if(on && (S.geoLat===null || S.geoLon===null)){ toast(t('geoWarnNoPlace')); break; }
+      try{ await DB.saveGeo({geo_on:on}); S.geoOn=on; toast(t('saved')); render(); }
+      catch(err){ dbErr(err); }
+      break;
+    }
+    case 'geo-radius': {
+      const r = parseInt(el.dataset.v,10)||100;
+      try{ await DB.saveGeo({geo_radius:r}); S.geoRadius=r; toast(t('saved')); render(); }
+      catch(err){ dbErr(err); }
+      break;
+    }
+    case 'geo-here': {
+      S.geoBusy=true; render();
+      const pos=await getPos();
+      S.geoBusy=false;
+      if(!pos){ toast(t('geoNoFix')); render(); break; }
+      try{
+        await DB.saveGeo({geo_lat:pos.lat, geo_lon:pos.lon});
+        S.geoLat=pos.lat; S.geoLon=pos.lon;
+        toast(t('geoSaved'));
+      }catch(err){ dbErr(err); }
+      render();
+      break;
+    }
+    case 'qr-toggle': S.showQR=!S.showQR; render(); break;
+    case 'qr-copy': {
+      const inp=document.getElementById('qr-url');
+      if(!inp) break;
+      try{ await navigator.clipboard.writeText(inp.value); toast(t('linkCopied')); }
+      catch(e){ try{ inp.select(); document.execCommand('copy'); toast(t('linkCopied')); }catch(e2){} }
+      break;
+    }
+    case 'qr-print': {
+      const box=document.getElementById('qr-box');
+      if(!box) break;
+      const w=window.open('','_blank');
+      if(!w){ toast(t('qrPrintBlocked')); break; }
+      w.document.write(`<!doctype html><meta charset="utf-8"><title>Turno QR</title>
+        <style>body{font-family:system-ui,sans-serif;text-align:center;padding:40px}
+        svg{width:320px;height:auto}h1{letter-spacing:.2em;text-transform:uppercase}
+        p{color:#555;font-size:18px}</style>
+        <h1>turno</h1>${box.innerHTML}<p>${esc(t('qrPoster'))}</p>`);
+      w.document.close();
+      setTimeout(()=>{ try{ w.print(); }catch(e){} }, 400);
       break;
     }
     case 'admin-reload': S.adminRows=null; render(); loadAdmin(); break;
@@ -2549,6 +2754,8 @@ document.addEventListener('click',async ev=>{
       try{ S.shifts=await DB.employeeShifts(code); }catch(e){ S.shifts=[]; }
       if(!LIVE){ try{ S.punchMode=(await DB.loadSettings()).punch_mode||'owner'; }catch(e){} }
       S.employees=[me]; S.me=me; S.myCode=code; S.platneDo=me.platne_do||null;
+      S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
+      S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
       S.role='employee'; S.loginErr=''; render(); break;
     }
     case 'signout': await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; render(); break;
@@ -2777,6 +2984,8 @@ setInterval(()=>{
   setLang(langFromUrl());
   const jc=joinCodeFromUrl();
   if(jc){ S.joinCode=jc; S.loginTab='join'; }
+  S.qrScanned=qrFromUrl();
+  if(S.qrScanned){ S.loginTab='employee'; clearQrFromUrl(); }
   if(LIVE){
     try{
       const ses=await DB.session();
@@ -2784,7 +2993,7 @@ setInterval(()=>{
         S.employees=await DB.loadEmployees();
         S.shifts=await DB.loadShifts();
         try{ S.notes=await DB.loadNotes(); }catch(e){}
-        try{ const st=await DB.loadSettings(); S.punchMode=st.punch_mode||'owner'; S.inviteCode=st.invite_code||null; S.peopleLimit=st.people_limit||3; S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne'; }catch(e){}
+        try{ const st=await DB.loadSettings(); applySettings(st); }catch(e){}
         S.role='owner';
       }
     }catch(e){console.warn(e)}
@@ -2804,8 +3013,7 @@ setInterval(()=>{
           await new Promise(r=>setTimeout(r,2000));
           try{
             const st=await DB.loadSettings();
-            S.peopleLimit=st.people_limit||3;
-            S.platneDo=st.platne_do||null; S.typPredplatneho=st.typ_predplatneho||'mesacne';
+            applySettings(st);
             if(S.peopleLimit!==before){ render(); break; }
           }catch(e){ break; }
         }
