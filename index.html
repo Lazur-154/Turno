@@ -424,6 +424,20 @@ body.locked{overflow:hidden}
   background:var(--bone);color:var(--ink);padding:10px 16px;border-radius:var(--r);
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;
   max-width:90vw;text-align:center}
+.subwarn{border:2px solid var(--brass);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+.subwarn.locked{border-color:#c0554a}
+.subwarn-t{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;
+  font-size:19px;font-weight:700;color:var(--brass);margin-bottom:8px;line-height:1.3}
+.subwarn.locked .subwarn-t{color:#e08076}
+.subwarn p{margin:0;font-size:15px;line-height:1.55}
+.pill{display:inline-block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+  border:1px solid var(--brass);color:var(--brass);border-radius:99px;padding:1px 7px;margin-left:7px}
+#app.ro [data-act^="punch"], #app.ro [data-act^="my-"], #app.ro [data-act^="brk"],
+#app.ro [data-act^="break"], #app.ro [data-act^="new-"], #app.ro [data-act^="del-"],
+#app.ro [data-act^="save-"], #app.ro [data-act="quick-in"], #app.ro [data-act="clear-dep"],
+#app.ro [data-act="fix"], #app.ro [data-act="undo"], #app.ro [data-act="edit-note"],
+#app.ro [data-act="regen-invite"], #app.ro [data-act="week-plan"],
+#app.ro .addrow{display:none !important}
 .paygrid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:15px;align-items:baseline}
 .paygrid span{color:var(--bone-dim)}
 .paygrid b{word-break:break-word}
@@ -467,6 +481,7 @@ const PAY_RECIPIENT = 'Filip Lazúr';
 const PAY_IBAN = 'SK31 1100 0000 0029 3681 6081';
 const YEAR_MONTHS = 10;
 const RENEW_WARN_DAYS = 7;   // od kolkych dni pred koncom zacneme upozornovat
+const GRACE_DAYS = 3;        // kolko dni po vyprsani este vsetko funguje normalne   // od kolkych dni pred koncom zacneme upozornovat
 const CONTACT_EMAIL = 'filiplazur89@gmail.com';
 const CONTACT_PHONE = '+421917294556';
 const CONTACT_PHONE_DISPLAY = '+421 917 294 556';
@@ -549,7 +564,8 @@ const S = {
   billingBusy:false,    // prebieha presmerovanie na Stripe (checkout/portal) — zabranuje dvojkliku
   platneDo:null,        // datum, do ktoreho je predplatne zaplatene (YYYY-MM-DD); null = bez obmedzenia
   typPredplatneho:'mesacne', // 'mesacne' | 'rocne' — co ma clovek nastavene v DB
-  payPlan:null          // co si prave prezera v platobnom paneli (null = podla DB)
+  payPlan:null,         // co si prave prezera v platobnom paneli (null = podla DB)
+  readonly:false        // predplatne dobehlo aj s odkladom — appka je len na citanie
 };
 const t = k => T[S.lang][k];
 
@@ -563,6 +579,16 @@ function isLocked(dateStr){
   const d = (dateStr===undefined ? S.platneDo : dateStr);
   if(!d) return false;
   return String(d).slice(0,10) < todayISO();
+}
+/* Tri stavy predplatneho:
+   'ok'     — vsetko normalne
+   'grace'  — uz vyprsalo, ale este GRACE_DAYS dni funguje vsetko + velke upozornenie
+   'locked' — odklad dobehol: dochadzka sa neda zapisovat, hodiny a mzdy vidno dalej
+              (aby sa dalo dopocitat, komu kolko vyplatit) */
+function subState(){
+  const dl = subDaysLeft();
+  if(dl===null || dl>=0) return 'ok';
+  return (dl >= -GRACE_DAYS) ? 'grace' : 'locked';
 }
 /* Suma podla poctu ludi, ktory ma firma zaplateny (people_limit). */
 function subPrice(){
@@ -1043,11 +1069,12 @@ const modalHost=document.getElementById('modal');
 
 function render(){
   if(!S.role){ root.innerHTML=viewLogin(); return; }
-  if(isLocked()){ root.innerHTML=viewLocked(); return; }
+  const st = subState();
+  S.readonly = (st==='locked');
   root.innerHTML = `
-    <div id="app">
+    <div id="app" class="${S.readonly?'ro':''}">
       ${viewHeader(S.role==='owner' ? navTabs() : '')}
-      <main>${
+      <main>${subBanner(st)}${
         S.role==='employee' ? viewMine() :
         S.view==='today' ? viewToday() :
         S.view==='plan'  ? viewPlan()  :
@@ -1516,7 +1543,7 @@ function planPanel(){
   const n=S.employees.length, lim=S.peopleLimit||3;
   /* Dokedy plati predplatne. Ked sa blizi koniec, rovno ukazeme aj cislo uctu. */
   const dl = subDaysLeft();
-  const warn = (dl!==null && dl<=RENEW_WARN_DAYS);
+  const warn = (dl!==null && dl>=0 && dl<=RENEW_WARN_DAYS);
   const subLine = !S.platneDo ? '' : (warn
     ? `<p class="help" style="margin:10px 0 0;color:var(--brass)">${dl<=0?t('subEndsToday'):t('subEndsIn').replace('{n}',dl).replace('{d}',dayWord(dl))}</p>`
     : `<p class="help" style="margin:10px 0 0">${t('subUntil')} <b>${esc(fmtDay(S.platneDo))}</b> \u00b7 ${S.typPredplatneho==='rocne'?t('payYearly'):t('payMonthly')}</p>`);
@@ -1726,7 +1753,7 @@ function payBlock(){
     <div class="eyebrow" style="margin-bottom:10px">${t('payHow')}</div>
     <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
       <button data-act="pay-plan" data-v="mesacne" aria-pressed="${plan!=='rocne'}">${t('payMonthly')}</button>
-      <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}</button>
+      <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}<span class="pill">${t('recommended')}</span></button>
     </div>
     ${plan==='rocne'?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
     <div class="paygrid">
@@ -1739,29 +1766,25 @@ function payBlock(){
     <p class="help" style="margin:12px 0 0">${plan==='rocne'?t('payHintYearly'):t('payHintMonthly')}</p>
   </div>`;
 }
-/* ---------- zamknuta appka: predplatne vyprsalo ---------- */
-function viewLocked(){
+/* ---------- velke upozornenie po vyprsani predplatneho ---------- */
+function subBanner(st){
+  if(st==='ok') return '';
   const owner = S.role==='owner';
-  return `<div class="login">
-    <div>
-      <div class="logo">turno<b>.app</b></div>
-      <div class="tag">${t('tagline')}</div>
-    </div>
-    <div class="panel">
-      <div class="eyebrow" style="margin-bottom:10px">🔒 ${t('lockedTitle')}</div>
-      <p class="help" style="margin:0">${owner?t('lockedBody'):t('lockedEmpBody')}</p>
-    </div>
-    ${owner?payBlock():''}
-    <div class="panel">
-      <div class="eyebrow" style="margin-bottom:10px">${t('supportTitle')}</div>
-      <div class="support-row">
-        <a class="btn ghost" href="tel:${CONTACT_PHONE}">📞 ${CONTACT_PHONE_DISPLAY}</a>
-        <a class="btn ghost" href="mailto:${CONTACT_EMAIL}">✉ ${t('supportEmail')}</a>
-      </div>
-    </div>
-    <button class="btn ghost" data-act="signout">${t('signout')}</button>
-    <div class="mode-note">${langSelect('locked-lang')}</div>
-  </div>`;
+  const left = GRACE_DAYS + subDaysLeft();   // kolko dni odkladu este zostava
+  let title, body;
+  if(st==='grace'){
+    title = t('graceTitle');
+    body = owner
+      ? (left<=0 ? t('graceLast') : t('graceBody').replace('{n}',left).replace('{d}',dayWord(left)))
+      : t('graceEmpBody');
+  } else {
+    title = t('lockedTitle');
+    body = owner ? t('roBody') : t('roEmpBody');
+  }
+  return `<div class="subwarn ${st==='locked'?'locked':''}">
+    <div class="subwarn-t">${st==='locked'?'\uD83D\uDD12':'\u26A0'} ${esc(title)}</div>
+    <p>${body}</p>
+  </div>${owner?payBlock():''}`;
 }
 function supportPanel(){
   return `<div class="panel" style="margin-top:18px">
@@ -2065,11 +2088,19 @@ document.addEventListener('keydown',ev=>{
 /* ============================================================
    EVENTS
    ============================================================ */
+const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
+  'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
+  'signin-owner','signin-emp','signup-owner','do-join','demo'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
 
   if(a==='scrim'&&ev.target!==el)return;
+
+  /* Rezim len na citanie: prezerat sa da vsetko (aj hodiny a mzdy),
+     zapisovat sa neda nic. Whitelist, nie blacklist — nova akcia je
+     radsej omylom zablokovana, nez aby omylom presla. */
+  if(S.readonly && RO_ALLOWED.indexOf(a)===-1){ toast(t('roToast')); return; }
 
   switch(a){
     case 'lang': setLang(el.dataset.v); render(); break;
