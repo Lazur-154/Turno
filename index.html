@@ -252,6 +252,20 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .cal .cell[aria-pressed=true]{background:var(--brass);color:var(--ink-fixed)}
 .cal .cell[aria-pressed=true] .h{color:var(--ink-fixed)}
 
+/* plan (mesacny rozvrh s initialmi) */
+.plan-cell{aspect-ratio:auto;min-height:56px;padding:4px 2px}
+.plan-chips{display:flex;flex-wrap:wrap;gap:2px;justify-content:center;min-height:14px}
+.plan-chip{font-family:var(--mono);font-size:9px;font-weight:700;letter-spacing:.02em;
+  background:var(--ink-3);color:var(--bone-dim);border-radius:3px;padding:1px 3px;line-height:1.4}
+.plan-cell.has .plan-chip{color:var(--verdigris)}
+.plan-chip.more{color:var(--accent)}
+.plan-cell[aria-pressed=true] .plan-chip{background:rgba(0,0,0,.18);color:var(--ink-fixed)}
+.bp-emp-list{max-height:220px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--r);padding:4px}
+.bp-emp-row{display:flex;align-items:center;gap:10px;padding:10px 8px;min-height:44px;font-size:15px}
+.bp-emp-row input{width:20px;height:20px;flex:0 0 auto}
+.bp-daypick{margin-top:2px}
+.bp-daypick .cell{cursor:pointer}
+
 /* table */
 .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
 table{width:100%;border-collapse:collapse;font-size:15px;min-width:320px}
@@ -491,7 +505,7 @@ body.locked{overflow:hidden}
 #app.ro [data-act^="break"], #app.ro [data-act^="new-"], #app.ro [data-act^="del-"],
 #app.ro [data-act^="save-"], #app.ro [data-act="quick-in"], #app.ro [data-act="clear-dep"],
 #app.ro [data-act="fix"], #app.ro [data-act="undo"], #app.ro [data-act="edit-note"],
-#app.ro [data-act="regen-invite"], #app.ro [data-act="week-plan"],
+#app.ro [data-act="regen-invite"], #app.ro [data-act="bulk-plan"],
 #app.ro .addrow{display:none !important}
 .paygrid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:15px;align-items:baseline}
 .paygrid span{color:var(--bone-dim)}
@@ -668,13 +682,14 @@ const S = {
   employees:[],
   shifts:[],
   notes:[],
-  weekStart:mondayOf(new Date()),
   calCursor:startOfMonth(new Date()),
   calPick:null,
+  calFilter:null,        // ak nastavene, Historia ukazuje len tohto zamestnanca
+  planCursor:startOfMonth(new Date()),
+  planPick:null,        // vybrany den v Plane (mesacny kalendar)
   justStamped:null,
   detail:false,        // false = jednoduchy rezim (default)
   undo:null,           // {id, field} — kratke okno na vratenie
-  dayOpen:null,        // rozbaleny den v Plane (naraz len jeden)
   punchMode:'owner',   // 'owner' = kliká len vlastník, 'self' = aj zamestnanci
   myCode:null,         // kód, ktorým sa zamestnanec prihlásil
   ownerId:null,        // ID prihláseného vlastníka (posielame ho pri zápise)
@@ -915,6 +930,9 @@ function durLong(h){
   return mm+' '+t('minUnit');
 }
 function empById(id){return S.employees.find(e=>e.id===id)}
+function initials(name){
+  return (name||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
+}
 function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
 function shiftsOn(date){
   return S.shifts.filter(s=>s.date===date)
@@ -1620,7 +1638,11 @@ function viewToday(){
       ${unscheduledBlock(list)}
       <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('planShift')}</button>`;
   }
-  return head+toggle+`<div class="cards">${list.map(card).join('')}</div>
+  // aktualne pracujuci hore, potom este nezacate, dokoncene na koniec —
+  // pri viac ludoch je hned vidno, kto prave robi, bez skrolovania.
+  const rank = s => (s.arrival && !s.departure) ? 0 : (!s.arrival ? 1 : 2);
+  const sorted = [...list].sort((a,b)=>rank(a)-rank(b));
+  return head+toggle+`<div class="cards">${sorted.map(card).join('')}</div>
     ${unscheduledBlock(list)}
     <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('addShift')}</button>`;
 }
@@ -1697,75 +1719,88 @@ function card(s){
   </div>`;
 }
 
-/* ---------- ROZVRH ---------- */
-/* Jeden riadok na den: den + kto robi. Detaily az po tuknuti.
-   Predtym tu bolo 27 tlacidiel naraz — z toho 18 krizikov. */
-function weekLabel(){
-  const mine=+S.weekStart, now=+mondayOf(new Date());
-  const wk=7*86400000;
-  if(mine===now)      return t('thisWeek');
-  if(mine===now-wk)   return t('lastWeek');
-  if(mine===now+wk)   return t('nextWeek');
-  const a=S.weekStart, b=addDays(a,6);
-  return `${a.getDate()}. ${a.getMonth()+1}. – ${b.getDate()}. ${b.getMonth()+1}.`;
+/* ---------- ROZVRH (Plán) ----------
+   Mesacny kalendar namiesto tyzdenneho zoznamu — vidno cely mesiac naraz,
+   kazdy den ukazuje initialy pridelenych ludi. Tuknutim na den sa otvori
+   detail nizsie (rovnaky panel pre cely mesiac, nie 7 samostatnych). Tlacidlo
+   "+ Naplanovat" otvara hromadne priradenie: viacero ludi + viacero dni naraz. */
+function viewPlan(){
+  const c=S.planCursor, y=c.getFullYear(), m=c.getMonth();
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const lead=(first.getDay()+6)%7;
+  const byDay={};
+  S.shifts.forEach(s=>{
+    const d=new Date(s.date+'T00:00:00');
+    if(d.getFullYear()===y&&d.getMonth()===m){
+      (byDay[s.date]=byDay[s.date]||[]).push(s);
+    }
+  });
+  let cells='';
+  for(let i=0;i<lead;i++)cells+=`<div class="cell mute"></div>`;
+  for(let d=1;d<=last.getDate();d++){
+    const key=`${y}-${pad(m+1)}-${pad(d)}`;
+    const list=byDay[key]||[];
+    const chips=list.slice(0,4).map(s=>{
+      const e=empById(s.employee_id); if(!e)return'';
+      return `<span class="plan-chip" title="${esc(e.name)}">${esc(initials(e.name))}</span>`;
+    }).join('');
+    const more=list.length>4?`<span class="plan-chip more">+${list.length-4}</span>`:'';
+    cells+=`<button class="cell plan-cell ${list.length?'has':''} ${key===todayISO()?'today':''}"
+      data-act="plan-pick" data-v="${key}" aria-pressed="${S.planPick===key}">
+      <span class="d">${d}</span>
+      <span class="plan-chips">${chips}${more}</span>
+    </button>`;
+  }
+  const detail = S.planPick ? planDayDetail(S.planPick) : '';
+  return `<div class="nav-week">
+      <button data-act="plan-month" data-v="-1">‹</button>
+      <span class="lbl">${T[S.lang].months[m]} ${y}</span>
+      <button data-act="plan-month" data-v="1">›</button>
+    </div>
+    <button class="btn" style="width:100%;margin-bottom:14px" data-act="bulk-plan">+ ${t('planWeek')}</button>
+    <p class="help">${t('tapDay')}</p>
+    <div class="cal plan-cal">
+      ${T[S.lang].dows.map(x=>`<div class="dow">${x}</div>`).join('')}
+      ${cells}
+    </div>
+    ${detail}`;
 }
 
-function viewPlan(){
-  let days='';
-  for(let i=0;i<7;i++){
-    const d=addDays(S.weekStart,i), key=iso(d);
-    const list=shiftsOn(key);
-    const isToday=key===todayISO();
-    const open=S.dayOpen===key;
-
-    // zbalene: len prve mena. ziadne casy, ziadne cisla, ziadne krizky.
-    const who = list.length
-      ? list.map(sh=>{const e=empById(sh.employee_id);return e?esc(e.name.split(' ')[0]):''}).filter(Boolean).join(', ')
-      : `<span class="none">${t('nobody')}</span>`;
-
-    days+=`<div class="day ${isToday?'is-today':''} ${open?'open':''}">
-      <button class="day-row" data-act="openday" data-v="${key}" aria-expanded="${open}">
-        <span class="day-when">${T[S.lang].dows[i]} ${d.getDate()}. ${d.getMonth()+1}.
-          ${isToday?`<span class="chip">${t('todayChip')}</span>`:''}</span>
-        <span class="day-who">${who}</span>
-      </button>
-      ${open?`<div class="day-body">
-        ${list.map(sh=>{
-          const e=empById(sh.employee_id); if(!e)return'';
-          let state;
-          if(!sh.arrival){
-            state=`<span class="tagl plan">${t('planLbl')}</span>
-                   <span class="mono">${esc(planLabel(sh))}</span>`;
-          }else if(!sh.departure){
-            state=`<span class="tagl on">${t('atWorkSince')}</span>
-                   <span class="mono">${hhmm(sh.arrival)}</span>`;
-          }else{
-            state=`<span class="tagl done">${t('workedLbl')}</span>
-                   <span>${durLong(hoursOf(sh))}</span>
-                   <span class="mono dim">${hhmm(sh.arrival)}–${hhmm(sh.departure)}</span>`;
-          }
-          return `<div class="shift-row">
-            <div class="sr-name">${esc(e.name)}</div>
-            <div class="sr-state">${state}</div>
-            <div class="sr-btns">
-              <button class="sr-edit" data-act="fix" data-id="${sh.id}">${t('fix')}</button>
-              <button class="sr-del" data-act="del-shift" data-id="${sh.id}">${t('removeShift')}</button>
-            </div>
-            ${brs(sh).length?`<div class="sr-breaks">${breakList(sh,true)}</div>`:''}
-          </div>`;
-        }).join('')}
-        <button class="addrow" data-act="new-shift" data-date="${key}">+ ${t('addShift')}</button>
-      </div>`:''}
+function planDayDetail(key){
+  const list=shiftsOn(key);
+  const d=new Date(key+'T00:00:00');
+  const isToday=key===todayISO();
+  const head=`${T[S.lang].dayNames[d.getDay()]} ${d.getDate()}. ${d.getMonth()+1}. ${d.getFullYear()}
+    ${isToday?`<span class="chip">${t('todayChip')}</span>`:''}`;
+  const rows = list.length ? list.map(sh=>{
+    const e=empById(sh.employee_id); if(!e)return'';
+    let state;
+    if(!sh.arrival){
+      state=`<span class="tagl plan">${t('planLbl')}</span>
+             <span class="mono">${esc(planLabel(sh))}</span>`;
+    }else if(!sh.departure){
+      state=`<span class="tagl on">${t('atWorkSince')}</span>
+             <span class="mono">${hhmm(sh.arrival)}</span>`;
+    }else{
+      state=`<span class="tagl done">${t('workedLbl')}</span>
+             <span>${durLong(hoursOf(sh))}</span>
+             <span class="mono dim">${hhmm(sh.arrival)}–${hhmm(sh.departure)}</span>`;
+    }
+    return `<div class="shift-row">
+      <div class="sr-name">${esc(e.name)}</div>
+      <div class="sr-state">${state}</div>
+      <div class="sr-btns">
+        <button class="sr-edit" data-act="fix" data-id="${sh.id}">${t('fix')}</button>
+        <button class="sr-del" data-act="del-shift" data-id="${sh.id}">${t('removeShift')}</button>
+      </div>
+      ${brs(sh).length?`<div class="sr-breaks">${breakList(sh,true)}</div>`:''}
     </div>`;
-  }
-  return `<div class="nav-week">
-      <button data-act="week" data-v="-1" aria-label="${t('lastWeek')}">‹</button>
-      <span class="lbl">${weekLabel()}</span>
-      <button data-act="week" data-v="1" aria-label="${t('nextWeek')}">›</button>
-    </div>
-    <button class="btn" style="width:100%;margin-bottom:14px" data-act="week-plan">+ ${t('planWeek')}</button>
-    <p class="help">${t('tapDay')}</p>
-    ${days}`;
+  }).join('') : `<p class="help" style="margin:10px 0">${t('nobody')}</p>`;
+  return `<div class="panel" style="margin-top:14px">
+    <div class="eyebrow" style="margin-bottom:8px">${head}</div>
+    ${rows}
+    <button class="addrow" data-act="new-shift" data-date="${key}">+ ${t('addShift')}</button>
+  </div>`;
 }
 
 /* ---------- KALENDÁR ---------- */
@@ -1778,6 +1813,7 @@ function costTrendChart(){
   for(let i=0;i<DAYS;i++) byDay[iso(addDays(start,i))]=0;
   S.shifts.forEach(s=>{
     if(!(s.date in byDay)) return;
+    if(S.calFilter && s.employee_id!==S.calFilter) return;
     const e=empById(s.employee_id); if(!e) return;
     byDay[s.date]+=hoursOf(s)*(+e.hourly_rate||0);
   });
@@ -1802,8 +1838,10 @@ function viewCal(){
   const c=S.calCursor, y=c.getFullYear(), m=c.getMonth();
   const first=new Date(y,m,1), last=new Date(y,m+1,0);
   const lead=(first.getDay()+6)%7;
+  const filt=S.calFilter;
   const byDay={};
   S.shifts.forEach(s=>{
+    if(filt && s.employee_id!==filt) return;
     const d=new Date(s.date+'T00:00:00');
     if(d.getFullYear()===y&&d.getMonth()===m){
       byDay[s.date]=(byDay[s.date]||0)+hoursOf(s);
@@ -1819,8 +1857,8 @@ function viewCal(){
       <span class="d">${d}</span>${h?`<span class="h">${num(h,1)}</span>`:''}</button>`;
   }
 
-  // mesačný súhrn
-  const rows=S.employees.map(e=>{
+  // mesačný súhrn (respektuje filter, ak je nastaveny)
+  const rows=S.employees.filter(e=>!filt||e.id===filt).map(e=>{
     let h=0;
     S.shifts.forEach(s=>{
       if(s.employee_id!==e.id)return;
@@ -1833,11 +1871,17 @@ function viewCal(){
 
   const detail = S.calPick ? dayDetail(S.calPick) : '';
 
+  const filterSel = S.employees.length>1 ? `<select class="langsel" data-act="cal-filter" style="margin-bottom:12px;width:100%">
+    <option value="">${t('allEmployees')}</option>
+    ${S.employees.map(e=>`<option value="${e.id}" ${filt===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}
+  </select>` : '';
+
   return costTrendChart()+`<div class="nav-week">
       <button data-act="month" data-v="-1">‹</button>
       <span class="lbl">${T[S.lang].months[m]} ${y}</span>
       <button data-act="month" data-v="1">›</button>
     </div>
+    ${filterSel}
     <p class="help">${t('legendHours')}</p>
     <div class="cal">
       ${T[S.lang].dows.map(x=>`<div class="dow">${x}</div>`).join('')}
@@ -1860,7 +1904,7 @@ function viewCal(){
 }
 
 function dayDetail(key){
-  const list=shiftsOn(key);
+  const list=shiftsOn(key).filter(s=>!S.calFilter||s.employee_id===S.calFilter);
   const d=new Date(key+'T00:00:00');
   const head=`${T[S.lang].dayNames[d.getDay()]} ${d.getDate()}. ${d.getMonth()+1}. ${d.getFullYear()}`;
   if(!list.length)return `<div class="panel" style="margin-top:14px">
@@ -2661,18 +2705,34 @@ function breakRowHtml(id,b){
 
 /* Planovanie na cely tyzden naraz. Predtym sa musela kazda zmena zadavat
    zvlast — pri 4 ludoch a 6 dnoch to bolo 24 otvoreni okna. */
-function openWeekModal(){
+/* Hromadne priradenie zmien \u2014 viacero ludi naraz, viacero dni v celom mesiaci naraz
+   (predtym: len jeden clovek, len jeden tyzden). Dni sa vyberaju v mini-kalendari,
+   ktory pouziva rovnaky vzhlad ako .cal/.cell (aria-pressed=true = zvyraznene). */
+function openBulkPlanModal(){
   if(!S.employees.length){toast(t('noPeople'));return;}
-  const ws=S.weekStart, we=addDays(ws,6);
-  const label=`${ws.getDate()}. ${ws.getMonth()+1}. \u2013 ${we.getDate()}. ${we.getMonth()+1}.`;
+  const c=S.planCursor, y=c.getFullYear(), m=c.getMonth();
+  const first=new Date(y,m,1), last=new Date(y,m+1,0);
+  const lead=(first.getDay()+6)%7;
+  let dayCells='';
+  for(let i=0;i<lead;i++)dayCells+=`<div class="cell mute"></div>`;
+  for(let d=1;d<=last.getDate();d++){
+    const key=`${y}-${pad(m+1)}-${pad(d)}`;
+    dayCells+=`<button type="button" class="cell" data-act="w-day" data-v="${key}" aria-pressed="false">
+      <span class="d">${d}</span></button>`;
+  }
   openModal(`<div class="scrim" data-act="scrim"><div class="sheet">
     <div class="sheet-head"><h3>${t('planWeek')}</h3>
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">\u2715</button></div>
-    <p class="help">${label}</p>
+    <p class="help">${T[S.lang].months[m]} ${y}</p>
     <div class="fg">
-      <div><label>${t('person')}</label><select id="w-emp" style="padding:14px">
-        ${S.employees.map(e=>`<option value="${e.id}">${esc(e.name)}</option>`).join('')}
-      </select></div>
+      <div><label>${t('pickPeople')}</label>
+        <div class="bp-emp-list" id="bp-emps">
+          ${S.employees.map(e=>`<label class="bp-emp-row">
+            <input type="checkbox" value="${e.id}"><span>${esc(e.name)}</span>
+          </label>`).join('')}
+        </div>
+        <button type="button" class="linkish" data-act="bp-all">${t('selectAllBtn')}</button>
+      </div>
       <div><label>${t('whichShift')}</label>
         <div class="presets" id="w-presets">
           <button data-act="w-preset" data-f="08:00" data-t="16:00">${t('morningS')}<small>8:00\u201316:00</small></button>
@@ -2686,18 +2746,15 @@ function openWeekModal(){
         <div><label>${t('to')}</label><input id="w-to" type="time" value="23:00" style="padding:14px"></div>
       </div>
       <div><label>${t('pickDays')}</label>
-        <div class="daypick" id="w-days">
-          ${T[S.lang].dows.map((d,i)=>{
-            const dd=addDays(ws,i);
-            return `<button data-act="w-day" data-i="${i}" aria-pressed="false">
-              <span class="dp-d">${d}</span><span class="dp-n">${dd.getDate()}.</span></button>`;
-          }).join('')}
+        <div class="cal bp-daypick" id="bp-days">
+          ${T[S.lang].dows.map(x=>`<div class="dow">${x}</div>`).join('')}
+          ${dayCells}
         </div>
       </div>
     </div>
     <div class="sheet-act">
       <button class="btn ghost" data-act="close">${t('cancel')}</button>
-      <button class="btn" data-act="save-week">${t('save')}</button>
+      <button class="btn" data-act="save-bulk-plan">${t('save')}</button>
     </div>
   </div></div>`);
 }
@@ -2813,7 +2870,7 @@ document.addEventListener('keydown',ev=>{
    EVENTS
    ============================================================ */
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
-  'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
+  'ltab','month','pay-plan','pickday','plan-month','plan-pick','show-pricing','signout','view',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
   'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme','landing-go','back-landing'];
 document.addEventListener('click',async ev=>{
@@ -2844,10 +2901,12 @@ document.addEventListener('click',async ev=>{
       if(S.view==='admin' && S.adminRows===null) loadAdmin(); render(); break;
     case 'export-csv': exportMonthCsv(); break;
     case 'my-qr': openModal(myQrModalBody()); setTimeout(drawMyQR,0); break;
-    case 'week': S.weekStart=addDays(S.weekStart,7*(+el.dataset.v)); S.dayOpen=null; render(); break;
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
                   S.calPick=null; render(); break;
     case 'pickday': S.calPick = S.calPick===el.dataset.v ? null : el.dataset.v; render(); break;
+    case 'plan-month': S.planCursor=new Date(S.planCursor.getFullYear(),S.planCursor.getMonth()+(+el.dataset.v),1);
+                  S.planPick=null; render(); break;
+    case 'plan-pick': S.planPick = S.planPick===el.dataset.v ? null : el.dataset.v; render(); break;
     case 'detail': S.detail=!S.detail; render(); break;
     case 'mode': {
       const v=el.dataset.v;
@@ -2860,7 +2919,6 @@ document.addEventListener('click',async ev=>{
     case 'theme-toggle': setTheme(S.theme==='dark'?'light':'dark'); render(); break;
     case 'landing-go': S.landing=false; S.loginTab=el.dataset.v; S.loginErr=''; S.signupDone=false; render(); break;
     case 'back-landing': S.landing=true; render(); break;
-    case 'openday': S.dayOpen = S.dayOpen===el.dataset.v ? null : el.dataset.v; render(); break;
 
     case 'preset': {
       const f=el.dataset.f, to=el.dataset.t;
@@ -3231,7 +3289,7 @@ document.addEventListener('click',async ev=>{
       break;
     }
 
-    case 'week-plan': openWeekModal(); break;
+    case 'bulk-plan': openBulkPlanModal(); break;
 
     case 'w-preset': {
       const f=el.dataset.f, to=el.dataset.t;
@@ -3251,23 +3309,30 @@ document.addEventListener('click',async ev=>{
       el.setAttribute('aria-pressed', on?'false':'true');
       break;
     }
-    case 'save-week': {
-      const emp=document.getElementById('w-emp').value;
+    case 'bp-all': {
+      const boxes=[...document.querySelectorAll('#bp-emps input[type=checkbox]')];
+      const allOn=boxes.every(b=>b.checked);
+      boxes.forEach(b=>b.checked=!allOn);
+      break;
+    }
+    case 'save-bulk-plan': {
+      const empIds=[...document.querySelectorAll('#bp-emps input:checked')].map(i=>i.value);
+      if(!empIds.length){ toast(t('pickPerson')); return; }
       const f=document.getElementById('w-from').value;
       const to=document.getElementById('w-to').value;
-      const picked=[...document.querySelectorAll('[data-act=w-day]')]
-        .filter(b=>b.getAttribute('aria-pressed')==='true').map(b=>+b.dataset.i);
-      if(!picked.length){ toast(t('noDays')); return; }
+      const days=[...document.querySelectorAll('#bp-days [data-act=w-day][aria-pressed=true]')].map(b=>b.dataset.v);
+      if(!days.length){ toast(t('noDays')); return; }
       let made=0;
-      for(const i of picked){
-        const key=iso(addDays(S.weekStart,i));
-        // ak uz v ten den zmenu ma, nezdvojujeme ju
-        if(S.shifts.some(x=>x.employee_id===emp && x.date===key)) continue;
-        try{
-          const sh=await DB.addShift({employee_id:emp,date:key,plan_start:f,plan_end:to,
-                                      arrival:null,departure:null,breaks:[]});
-          S.shifts.push(sh); made++;
-        }catch(err){ dbErr(err); closeModal(); render(); return; }
+      for(const emp of empIds){
+        for(const key of days){
+          // ak uz v ten den zmenu ma, nezdvojujeme ju
+          if(S.shifts.some(x=>x.employee_id===emp && x.date===key)) continue;
+          try{
+            const sh=await DB.addShift({employee_id:emp,date:key,plan_start:f,plan_end:to,
+                                        arrival:null,departure:null,breaks:[]});
+            S.shifts.push(sh); made++;
+          }catch(err){ dbErr(err); closeModal(); render(); return; }
+        }
       }
       closeModal(); toast(t('createdN')+made); render(); break;
     }
@@ -3282,7 +3347,7 @@ document.addEventListener('click',async ev=>{
       const row={employee_id:emp,date,plan_start:f,plan_end:to,arrival:null,departure:null,breaks:[]};
       try{
         const s=await DB.addShift(row);
-        S.shifts.push(s); S.dayOpen=date; closeModal(); toast(t('added')); render();
+        S.shifts.push(s); S.planPick=date; closeModal(); toast(t('added')); render();
       }catch(err){ dbErr(err); }
       break;
     }
@@ -3377,6 +3442,7 @@ document.addEventListener('click',async ev=>{
 document.addEventListener('change',async ev=>{
   const el=ev.target;
   if(el.dataset&&el.dataset.act==='langsel'){ setLang(el.value); render(); return; }
+  if(el.dataset&&el.dataset.act==='cal-filter'){ S.calFilter=el.value||null; render(); return; }
   if(el.dataset&&el.dataset.act==='pay-tier'){
     S.payTier = parseInt(el.value,10)||3;
     if(S.subModal) openModal(subModalBody()); else render();
