@@ -39,8 +39,11 @@
   --line:#2A5163;
   --bone:#ECEAE1;
   --bone-dim:#9FB0B8;
+  --muted:var(--muted);
   --brass:#E0A82E;
   --brass-dark:#B8871F;
+  --accent:#E0A82E;
+  --ink-fixed:#0E2530;
   --verdigris:#3FA787;
   --rust:#C4553D;
   --r:4px;
@@ -48,6 +51,18 @@
   --disp:"Barlow Condensed",ui-sans-serif,sans-serif;
   --body:"Barlow",ui-sans-serif,system-ui,sans-serif;
   --mono:"IBM Plex Mono",ui-monospace,monospace;
+}
+/* Svetly rezim — prepina sa tlacidlom v hlavicke, ulozi sa v localStorage
+   prehliadaca (per-zariadenie, nie je to firemne nastavenie v DB). */
+:root[data-theme="light"]{
+  --ink:#F6F2E9;
+  --ink-2:#EFE8D6;
+  --ink-3:#E4DAC0;
+  --line:#D8CDB0;
+  --bone:#1B2E38;
+  --bone-dim:#5B6E76;
+  --muted:#7C8B90;
+  --accent:#8A6412;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
@@ -69,7 +84,7 @@ input,select,textarea{
 }
 textarea{resize:vertical;min-height:44px}
 input:focus-visible,select:focus-visible,button:focus-visible,textarea:focus-visible{
-  outline:2px solid var(--brass);outline-offset:2px;
+  outline:2px solid var(--accent);outline-offset:2px;
 }
 .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;letter-spacing:-.02em}
 .caps{font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:700;line-height:1.05}
@@ -85,12 +100,12 @@ header.bar{
 }
 .bar-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:20px}
-.brand b{color:var(--brass);font-weight:700}
+.brand b{color:var(--accent);font-weight:700}
 .bar-tools{display:flex;align-items:center;gap:8px}
 .lang{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .lang button{font-family:var(--disp);font-weight:600;letter-spacing:.08em;font-size:13px;
   padding:12px 12px;min-height:44px;color:var(--bone-dim)}
-.lang button[aria-pressed=true]{background:var(--brass);color:var(--ink)}
+.lang button[aria-pressed=true]{background:var(--brass);color:var(--ink-fixed)}
 .langsel{width:auto;min-height:44px;padding:10px 12px;font-family:var(--disp);font-weight:600;
   letter-spacing:.04em;font-size:14px;background:var(--ink);border:1px solid var(--line);border-radius:var(--r)}
 .icon-btn{border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;min-height:44px;
@@ -98,7 +113,7 @@ header.bar{
   font-weight:600;color:var(--bone-dim)}
 .bar-sub{display:flex;justify-content:space-between;align-items:baseline;margin-top:6px}
 .bar-sub .date{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:14px;color:var(--bone-dim)}
-.bar-sub .clock{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--brass);font-variant-numeric:tabular-nums}
+.bar-sub .clock{font-family:var(--mono);font-size:15px;font-weight:500;color:var(--accent);font-variant-numeric:tabular-nums}
 
 main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;margin:0 auto}
 
@@ -112,7 +127,7 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .ribbon .k{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-size:11px;color:var(--bone-dim)}
 .ribbon .v{font-family:var(--mono);font-size:19px;font-weight:600;margin-top:2px}
 .ribbon .v.on{color:var(--verdigris)}
-.ribbon .v.money{color:var(--brass)}
+.ribbon .v.money{color:var(--accent)}
 
 /* ---------- punch card (signature) ---------- */
 .cards{display:grid;gap:12px}
@@ -141,7 +156,7 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .card-act{display:flex;align-items:center;gap:14px;margin-top:14px;flex-wrap:wrap}
 .punch{
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-weight:700;font-size:17px;
-  padding:14px 22px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+  padding:14px 22px;border-radius:var(--r);background:var(--brass);color:var(--ink-fixed);
   min-width:132px;text-align:center;transition:transform .08s ease;
 }
 .punch:active{transform:scale(.97)}
@@ -151,7 +166,7 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .stamps .row{display:flex;gap:8px}
 .stamps .lbl{color:var(--bone-dim);min-width:56px}
 .stamps .live{color:var(--verdigris);font-weight:600}
-.stamps .tot{color:var(--brass);font-weight:600}
+.stamps .tot{color:var(--accent);font-weight:600}
 @keyframes stamp{
   0%{transform:scale(1.5) rotate(-7deg);opacity:0}
   60%{transform:scale(.94) rotate(1deg);opacity:1}
@@ -165,7 +180,7 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .sec-head h2{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:22px;margin:0;font-weight:700}
 .btn{
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;font-weight:700;font-size:14px;
-  padding:10px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+  padding:10px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink-fixed);
 }
 .btn.ghost{background:none;border:1px solid var(--line);color:var(--bone)}
 .btn.danger{background:none;border:1px solid var(--rust);color:var(--rust);padding:7px 11px;font-size:12px}
@@ -185,15 +200,15 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .day-when{font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-size:16px;
   font-weight:700;flex:0 0 auto;display:flex;align-items:center;gap:8px;color:var(--bone)}
 .day-who{font-size:15px;color:var(--bone-dim);text-align:right;line-height:1.35}
-.day-who .none{color:#5A7885;font-style:italic}
-.day.is-today .day-when{color:var(--brass)}
+.day-who .none{color:var(--muted);font-style:italic}
+.day.is-today .day-when{color:var(--accent)}
 .day.open{background:var(--ink-2)}
 .day.open .day-row{border-bottom:1px dashed var(--line)}
 .chip{font-family:var(--disp);font-size:10px;letter-spacing:.14em;padding:3px 7px;border-radius:2px;
-  background:var(--brass);color:var(--ink);font-weight:700}
+  background:var(--brass);color:var(--ink-fixed);font-weight:700}
 .day-body{padding:6px 6px 14px}
 .shift-row{display:grid;grid-template-columns:1fr auto;gap:6px 12px;align-items:center;
-  padding:12px 0;border-bottom:1px solid #21444F}
+  padding:12px 0;border-bottom:1px solid var(--line)}
 .sr-name{font-weight:500;font-size:16px}
 .sr-state{grid-column:1;display:flex;flex-wrap:wrap;align-items:center;gap:8px;font-size:14px}
 .sr-state .mono{font-family:var(--mono)}
@@ -202,17 +217,17 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
 .sr-edit,.sr-del{border:1px solid var(--line);border-radius:var(--r);
   padding:10px 12px;min-height:44px;font-size:12px;color:var(--bone-dim);
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;white-space:nowrap}
-.sr-edit{color:var(--brass);border-color:var(--brass)}
+.sr-edit{color:var(--accent);border-color:var(--accent)}
 .sr-breaks{grid-column:1/-1}
 .tagl{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:10px;
   font-weight:700;padding:4px 7px;border-radius:2px}
 .tagl.plan{background:var(--ink-3);color:var(--bone-dim)}
-.tagl.on{background:var(--verdigris);color:var(--ink)}
+.tagl.on{background:var(--verdigris);color:var(--ink-fixed)}
 .tagl.done{background:var(--ink-3);color:var(--verdigris)}
 /* stare styly (uz nepouzite v Plane, drzime pre istotu) */
 .day-group{border-top:1px solid var(--line);padding:12px 0}
 .day-group:last-child{border-bottom:1px solid var(--line)}
-.day-group.today .dg-h{color:var(--brass)}
+.day-group.today .dg-h{color:var(--accent)}
 .dg-h{display:flex;justify-content:space-between;align-items:baseline;font-family:var(--disp);
   text-transform:uppercase;letter-spacing:.1em;font-size:14px;font-weight:600;margin-bottom:8px}
 .dg-h .h{font-family:var(--mono);letter-spacing:0;color:var(--bone-dim);font-size:13px}
@@ -229,13 +244,13 @@ main{flex:1;padding:var(--pad);padding-bottom:96px;max-width:1180px;width:100%;m
   aspect-ratio:1/1;min-height:44px;background:var(--ink-2);border:1px solid transparent;border-radius:var(--r);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;padding:2px;
 }
-.cal .cell.mute{background:transparent;color:#4A6875}
+.cal .cell.mute{background:transparent;color:var(--muted)}
 .cal .cell .d{font-family:var(--mono);font-size:13px}
 .cal .cell .h{font-family:var(--mono);font-size:11px;color:var(--verdigris);font-weight:600}
 .cal .cell.has{border-color:var(--line)}
-.cal .cell.today{border-color:var(--brass)}
-.cal .cell[aria-pressed=true]{background:var(--brass);color:var(--ink)}
-.cal .cell[aria-pressed=true] .h{color:var(--ink)}
+.cal .cell.today{border-color:var(--accent)}
+.cal .cell[aria-pressed=true]{background:var(--brass);color:var(--ink-fixed)}
+.cal .cell[aria-pressed=true] .h{color:var(--ink-fixed)}
 
 /* table */
 .panel{overflow-x:auto;-webkit-overflow-scrolling:touch}
@@ -243,24 +258,27 @@ table{width:100%;border-collapse:collapse;font-size:15px;min-width:320px}
 th{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:11px;
   color:var(--bone-dim);text-align:right;padding:8px 6px;border-bottom:1px solid var(--line);font-weight:600}
 th:first-child{text-align:left}
-td{padding:9px 6px;border-bottom:1px solid #21444F;text-align:right;font-family:var(--mono);font-size:14px}
+td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:right;font-family:var(--mono);font-size:14px}
 td:first-child{text-align:left;font-family:var(--body);font-size:15px}
 tr.brk-tr td{padding:0 0 10px;text-align:left}
-tr.sum td{border-bottom:0;border-top:2px solid var(--line);color:var(--brass);font-weight:600}
+tr.sum td{border-bottom:0;border-top:2px solid var(--line);color:var(--accent);font-weight:600}
 tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em}
 
 /* people */
 .person{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;
-  padding:12px 0;border-bottom:1px solid #21444F}
+  padding:12px 0;border-bottom:1px solid var(--line)}
 .person .pname{font-family:var(--disp);text-transform:uppercase;font-weight:700;letter-spacing:.04em;font-size:18px}
 .person .pcode{font-family:var(--mono);font-size:12px;color:var(--bone-dim)}
 .rate-edit{display:flex;align-items:center;gap:5px}
 .lg{font-size:13px;color:var(--bone-dim)}
 .lg.now{color:var(--verdigris);font-weight:600}
-.lg.none{color:#5A7885;font-style:italic}
-.pcode b{font-family:var(--mono);color:var(--brass);font-size:14px;letter-spacing:.08em}
+.lg.none{color:var(--muted);font-style:italic}
+.pcode b{font-family:var(--mono);color:var(--accent);font-size:14px;letter-spacing:.08em}
 .rate-edit input{width:74px;text-align:right;font-family:var(--mono);padding:7px 8px}
 .rate-edit span{font-family:var(--mono);font-size:13px;color:var(--bone-dim)}
+.position-row{margin-top:6px}
+.position-edit{max-width:220px;padding:6px 8px;font-size:13px;color:var(--bone-dim);border-color:var(--line)}
+.position-edit::placeholder{color:var(--muted)}
 @media(max-width:430px){
   .person{grid-template-columns:1fr auto;row-gap:10px}
   .person>div:first-child{grid-column:1/-1}
@@ -278,7 +296,7 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .punch-big{
   display:block;width:100%;margin-top:12px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;font-weight:700;font-size:22px;
-  padding:20px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink);
+  padding:20px 16px;border-radius:var(--r);background:var(--brass);color:var(--ink-fixed);
   min-height:64px;transition:transform .08s ease;
 }
 .punch-big:active{transform:scale(.985)}
@@ -287,9 +305,9 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
   padding:14px;min-height:52px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;
   font-weight:600;font-size:15px;color:var(--bone-dim)}
 .punch-sec:active{background:var(--ink-3)}
-.status.pause{color:var(--brass);font-weight:500}
-.card.paused{border-color:var(--brass)}
-.card.paused::before{border-color:var(--brass)}
+.status.pause{color:var(--accent);font-weight:500}
+.card.paused{border-color:var(--accent)}
+.card.paused::before{border-color:var(--accent)}
 .status{font-size:16px;margin-top:4px;color:var(--bone-dim)}
 .status.on{color:var(--verdigris);font-weight:500}
 .status.fin{color:var(--bone-dim)}
@@ -301,9 +319,9 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
   font-weight:700;color:var(--bone-dim);margin-bottom:6px}
 .bl-row{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;
   font-size:14px;padding:3px 0}
-.bl-n{color:#5A7885;font-family:var(--mono);font-size:12px}
+.bl-n{color:var(--muted);font-family:var(--mono);font-size:12px}
 .bl-t{font-size:14px}
-.bl-d{color:var(--brass);font-size:13px;text-align:right}
+.bl-d{color:var(--accent);font-size:13px;text-align:right}
 .bl-sum{border-top:1px solid var(--line);margin-top:5px;padding-top:6px}
 .bl-sum .bl-t{font-family:var(--disp);text-transform:uppercase;letter-spacing:.1em;font-size:11px;
   color:var(--bone-dim)}
@@ -311,9 +329,9 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .card-foot{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:12px;
   min-height:44px}
 .undo-row{display:flex;align-items:center;gap:12px;margin-top:10px;font-size:14px;color:var(--bone-dim)}
-.undo-row button{color:var(--brass);font-weight:600;text-decoration:underline;
+.undo-row button{color:var(--accent);font-weight:600;text-decoration:underline;
   padding:10px 4px;min-height:44px;font-size:15px}
-.linkish{color:var(--brass);text-decoration:underline;font-size:15px;padding:12px 6px;min-height:44px}
+.linkish{color:var(--accent);text-decoration:underline;font-size:15px;padding:12px 6px;min-height:44px}
 .plainline{font-size:17px;margin:0 0 18px;padding:12px 14px;background:var(--ink-2);
   border:1px solid var(--line);border-radius:var(--r)}
 .plainline .nm{color:var(--verdigris);font-weight:600}
@@ -325,7 +343,7 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
   border:1px solid var(--line);flex:0 0 auto;transition:background .15s}
 .switch::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;
   background:var(--bone-dim);transition:transform .15s,background .15s}
-.toggle[aria-pressed=true] .switch{background:var(--brass);border-color:var(--brass)}
+.toggle[aria-pressed=true] .switch{background:var(--brass);border-color:var(--accent)}
 .toggle[aria-pressed=true] .switch::after{transform:translateX(20px);background:var(--ink)}
 .brk-row{display:grid;grid-template-columns:1fr auto 1fr auto;align-items:center;gap:8px;margin-bottom:8px}
 .brk-row input{padding:12px 10px;font-family:var(--mono)}
@@ -337,7 +355,7 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .daypick{display:grid;grid-template-columns:repeat(7,1fr);gap:5px}
 .daypick button{border:1px solid var(--line);border-radius:var(--r);padding:10px 2px;min-height:58px;
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:var(--bone-dim)}
-.daypick button[aria-pressed=true]{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.daypick button[aria-pressed=true]{background:var(--brass);border-color:var(--accent);color:var(--ink-fixed)}
 .dp-d{font-family:var(--disp);text-transform:uppercase;letter-spacing:.04em;font-weight:700;font-size:12px}
 .dp-n{font-family:var(--mono);font-size:11px;opacity:.75}
 .invite-row{display:flex;gap:8px;margin-bottom:10px}
@@ -353,9 +371,9 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .chart-sum{font-family:var(--mono);font-size:24px;font-weight:600;color:var(--bone);margin:2px 0 10px}
 .chart-sum-lbl{font-family:var(--body);font-size:12px;color:var(--bone-dim);font-weight:400;margin-left:8px;letter-spacing:.02em}
 .bar-chart{width:100%;height:88px;display:block}
-.bar-mark{fill:var(--brass);opacity:.78;transition:opacity .15s}
+.bar-mark{fill:var(--accent);opacity:.78;transition:opacity .15s}
 .bar-mark:hover{opacity:1}
-.bar-today{fill:var(--brass)}
+.bar-today{fill:var(--accent)}
 .plan-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
 .plan-tier-list{display:flex;flex-direction:column;gap:2px;margin-top:4px}
 .plan-tier-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0;border-bottom:1px solid var(--line)}
@@ -368,18 +386,18 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
   color:var(--bone);text-align:center;line-height:1.2}
-.presets button[aria-pressed=true]{background:var(--brass);border-color:var(--brass);color:var(--ink)}
+.presets button[aria-pressed=true]{background:var(--brass);border-color:var(--accent);color:var(--ink-fixed)}
 .presets button small{display:block;font-family:var(--mono);font-size:12px;letter-spacing:0;
   opacity:.7;text-transform:none;margin-top:2px}
 .help{font-size:14px;color:var(--bone-dim);margin:0 0 12px}
 .quick-row{display:flex;align-items:center;justify-content:space-between;gap:12px;
-  padding:10px 0;border-bottom:1px solid #21444F}
+  padding:10px 0;border-bottom:1px solid var(--line)}
 .quick-row:last-child{border-bottom:0}
 .quick-name{font-family:var(--disp);text-transform:uppercase;font-weight:700;letter-spacing:.04em;font-size:17px}
-.quick-btn{border:2px solid var(--brass);color:var(--brass);border-radius:var(--r);
+.quick-btn{border:2px solid var(--accent);color:var(--accent);border-radius:var(--r);
   padding:12px 16px;min-height:48px;font-family:var(--disp);text-transform:uppercase;
   letter-spacing:.08em;font-weight:700;font-size:14px;white-space:nowrap}
-.quick-btn:active{background:var(--brass);color:var(--ink)}
+.quick-btn:active{background:var(--brass);color:var(--ink-fixed)}
 .addrow{display:block;width:100%;margin-top:10px;border:1px dashed var(--line);border-radius:var(--r);
   padding:14px;min-height:52px;color:var(--bone-dim);font-family:var(--disp);
   text-transform:uppercase;letter-spacing:.08em;font-weight:600;font-size:13px}
@@ -397,13 +415,13 @@ nav.tabs button{
   flex:1;padding:11px 4px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;
   font-size:12px;font-weight:600;color:var(--bone-dim);border-top:2px solid transparent;
 }
-nav.tabs button[aria-pressed=true]{color:var(--brass);border-top-color:var(--brass)}
+nav.tabs button[aria-pressed=true]{color:var(--accent);border-top-color:var(--accent)}
 @media(min-width:900px){
   header.bar{padding-bottom:0}
   nav.tabs{position:static;bottom:auto;width:100%;margin:10px 0 0;background:transparent;
     border-top:0;border-bottom:0;padding:0}
   nav.tabs button{flex:0 0 auto;padding:12px 20px;border-top:0;border-bottom:2px solid transparent}
-  nav.tabs button[aria-pressed=true]{border-bottom-color:var(--brass)}
+  nav.tabs button[aria-pressed=true]{border-bottom-color:var(--accent)}
   main{padding-bottom:40px}
 }
 
@@ -427,12 +445,12 @@ body.locked{overflow:hidden}
 .login{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;justify-content:center;
   padding:32px var(--pad);max-width:420px;margin:0 auto;gap:20px}
 .login .logo{font-family:var(--disp);text-transform:uppercase;letter-spacing:.2em;font-size:34px;font-weight:700}
-.login .logo b{color:var(--brass)}
+.login .logo b{color:var(--accent)}
 .login .tag{color:var(--bone-dim);margin-top:2px;font-size:15px}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .seg button{flex:1;padding:10px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
   font-size:13px;font-weight:600;color:var(--bone-dim)}
-.seg button[aria-pressed=true]{background:var(--brass);color:var(--ink)}
+.seg button[aria-pressed=true]{background:var(--brass);color:var(--ink-fixed)}
 .err{color:var(--rust);font-size:14px;min-height:20px}
 .mode-note{font-size:13px;color:var(--bone-dim);border-top:1px solid var(--line);padding-top:14px}
 
@@ -444,14 +462,14 @@ body.locked{overflow:hidden}
   background:var(--bone);color:var(--ink);padding:10px 16px;border-radius:var(--r);
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.08em;font-weight:700;font-size:13px;
   max-width:90vw;text-align:center}
-.subwarn{border:2px solid var(--brass);border-radius:14px;padding:18px 20px;margin-bottom:18px}
+.subwarn{border:2px solid var(--accent);border-radius:14px;padding:18px 20px;margin-bottom:18px}
 .subwarn.locked{border-color:#c0554a}
 .subwarn-t{font-family:var(--disp);text-transform:uppercase;letter-spacing:.12em;
-  font-size:19px;font-weight:700;color:var(--brass);margin-bottom:8px;line-height:1.3}
+  font-size:19px;font-weight:700;color:var(--accent);margin-bottom:8px;line-height:1.3}
 .subwarn.locked .subwarn-t{color:#e08076}
 .subwarn p{margin:0;font-size:15px;line-height:1.55}
 .pill{display:inline-block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;
-  border:1px solid var(--brass);color:var(--brass);border-radius:99px;padding:1px 7px;margin-left:7px}
+  border:1px solid var(--accent);color:var(--accent);border-radius:99px;padding:1px 7px;margin-left:7px}
 #app.ro [data-act^="punch"], #app.ro [data-act^="my-"], #app.ro [data-act^="brk"],
 #app.ro [data-act^="break"], #app.ro [data-act^="new-"], #app.ro [data-act^="del-"],
 #app.ro [data-act^="save-"], #app.ro [data-act="quick-in"], #app.ro [data-act="clear-dep"],
@@ -666,9 +684,30 @@ const S = {
   showQR:false,          // je rozbaleny plagat s QR kodom?
   stationToken:null,     // ?stanica=TOKEN — appka bezi ako skener, ziadne prihlasenie
   stationMsg:null,       // {ok, text} — posledny vysledok skenovania (docasne hlasenie)
-  stationErr:null        // chyba pri spustani kamery ('denied' | 'missing' | null)
+  stationErr:null,       // chyba pri spustani kamery ('denied' | 'missing' | null)
+  theme:'dark'           // 'dark' | 'light' — len na tomto zariadeni (localStorage), nie v DB
 };
 const t = k => T[S.lang][k];
+
+/* ---------------- tmavy / svetly rezim ----------------
+   Cisto klientska vec (jedno zariadenie), preto localStorage a nie Supabase.
+   Nastavuje sa hned pri nacitani skriptu, aby stranka nebliklo v zlom rezime. */
+const THEME_KEY = 'turno_theme';
+(function initTheme(){
+  /* Predvolene ostava tmavy rezim (povodny vzhlad appky) — prepneme
+     len vtedy, ak si niekto svetly rezim uz predtym sam zvolil na tomto
+     zariadeni. Zamerne nehadame podla systemu, aby sa nikomu nezmenil
+     vzhlad appky bez toho, aby si to vypytal. */
+  let saved=null;
+  try{ saved=localStorage.getItem(THEME_KEY); }catch(e){}
+  if(saved==='light'||saved==='dark') S.theme=saved;
+  document.documentElement.setAttribute('data-theme', S.theme);
+})();
+function setTheme(v){
+  S.theme = v==='light' ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', S.theme);
+  try{ localStorage.setItem(THEME_KEY, S.theme); }catch(e){}
+}
 
 /* ---------------- helpers ---------------- */
 function pad(n){return String(n).padStart(2,'0')}
@@ -1315,7 +1354,7 @@ const modalHost=document.getElementById('modal');
 function render(){
   if(S.stationToken){ root.innerHTML=viewStation(); return; }
   if(!S.role){ root.innerHTML=viewLogin(); return; }
-  setTimeout(()=>{ if(S.showQR && S.view==='people') drawQR(); },0);
+  setTimeout(()=>{ if(S.showQR && S.view==='settings') drawQR(); },0);
   const st = subState();
   S.readonly = (st==='locked');
   root.innerHTML = `
@@ -1327,7 +1366,8 @@ function render(){
         S.view==='plan'  ? viewPlan()  :
         S.view==='cal'   ? viewCal()   :
         S.view==='notes' ? viewNotes() :
-        S.view==='admin' ? viewAdmin() : viewPeople()
+        S.view==='admin' ? viewAdmin() :
+        S.view==='settings' ? viewSettings() : viewPeople()
       }</main>
       ${S.role==='owner' ? '' : ''}
     </div>`;
@@ -1438,6 +1478,7 @@ function viewHeader(navHtml){
       <div class="brand">turn<b>o</b></div>
       <div class="bar-tools">
         ${langSelect('lang-head')}
+        <button class="icon-btn" data-act="theme-toggle" aria-label="${S.theme==='dark'?t('themeToLight'):t('themeToDark')}" title="${S.theme==='dark'?t('themeToLight'):t('themeToDark')}">${S.theme==='dark'?'☀':'☾'}</button>
         <button class="icon-btn" data-act="signout">${t('signout')}</button>
       </div>
     </div>
@@ -1450,7 +1491,7 @@ function viewHeader(navHtml){
 }
 
 function navTabs(){
-  const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['notes',t('tabNotes')],['people',t('tabPeople')]];
+  const items=[['today',t('tabToday')],['plan',t('tabPlan2')],['cal',t('tabHist')],['notes',t('tabNotes')],['people',t('tabPeople')],['settings',t('tabSettings')]];
   if(S.isAdmin) items.push(['admin','Admin']);
   return `<nav class="tabs">${items.map(([k,l])=>
     `<button data-act="view" data-v="${k}" aria-pressed="${S.view===k}">${l}</button>`).join('')}</nav>`;
@@ -1867,7 +1908,7 @@ function planPanel(){
   const dl = subDaysLeft();
   const warn = (dl!==null && dl>=0 && dl<=RENEW_WARN_DAYS);
   const subLine = !S.platneDo ? '' : (warn
-    ? `<p class="help" style="margin:10px 0 0;color:var(--brass)">${dl<=0?t('subEndsToday'):t('subEndsIn').replace('{n}',dl).replace('{d}',dayWord(dl))}</p>`
+    ? `<p class="help" style="margin:10px 0 0;color:var(--accent)">${dl<=0?t('subEndsToday'):t('subEndsIn').replace('{n}',dl).replace('{d}',dayWord(dl))}</p>`
     : `<p class="help" style="margin:10px 0 0">${t('subUntil')} <b>${esc(fmtDay(S.platneDo))}</b> \u00b7 ${S.typPredplatneho==='rocne'?t('payYearly'):t('payMonthly')}</p>`);
   const tier=PLAN_TIERS.find(t2=>n<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
   const curTier=PLAN_TIERS.find(t2=>lim<=t2.upTo)||PLAN_TIERS[PLAN_TIERS.length-1];
@@ -1885,7 +1926,7 @@ function planPanel(){
         <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
       </div>
     </div>
-    ${atLimit?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('limitWarn')}</p>`:''}
+    ${atLimit?`<p class="help" style="margin:10px 0 0;color:var(--accent)">${t('limitWarn')}</p>`:''}
     ${subLine}
   </div>`+(warn?payBlock():'');
 }
@@ -1930,7 +1971,7 @@ function pricingModalBody(reached){
       <button data-act="pay-plan" data-v="mesacne" aria-pressed="${plan!=='rocne'}">${t('payMonthly')}</button>
       <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}<span class="pill">${t('recommended')}</span></button>
     </div>
-    ${plan==='rocne'?`<p class="help" style="margin:0 0 10px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
+    ${plan==='rocne'?`<p class="help" style="margin:0 0 10px;color:var(--accent)">${t('yearlyBonus')}</p>`:''}
     <div class="plan-tier-list">${rows}</div>
     ${alreadyPaying
       ?`<p class="help" style="margin:12px 0 0">${t('pricingContact')}</p>
@@ -1961,7 +2002,7 @@ function subModalBody(){
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">\u2715</button></div>
     <div class="paygrid" style="margin-bottom:16px">
       <span>${t('subUntil')}</span><b>${esc(S.platneDo?fmtDay(S.platneDo):'\u2013')}</b>
-      <span>${t('subLeftLbl')}</span><b${st==='ok'?'':' style="color:var(--brass)"'}>${esc(leftTxt)}</b>
+      <span>${t('subLeftLbl')}</span><b${st==='ok'?'':' style="color:var(--accent)"'}>${esc(leftTxt)}</b>
       <span>${t('subTypeLbl')}</span><b>${S.typPredplatneho==='rocne'?t('payYearly'):t('payMonthly')}</b>
       <span>${t('peopleUsageLbl')}</span><b>${S.employees.length} / ${S.peopleLimit||3}</b>
     </div>
@@ -2016,6 +2057,49 @@ function openNoteModal(edit){
   </div></div>`);
 }
 function viewPeople(){
+  const link = S.inviteCode
+    ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
+  const invite = `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('addPerson')}</div>
+    <p class="help" style="margin:0 0 10px">${t('inviteHint')}</p>
+    <div class="invite-row">
+      <input id="invite-link" class="mono" readonly value="${esc(link)}" style="padding:12px">
+      <button class="btn ghost" data-act="copy-invite">${t('copyLink')}</button>
+    </div>
+    <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
+  </div>`;
+  /* Pozicie, ktore uz vlastnik niekde pouzil \u2014 ponukneme ako napovedu (datalist),
+     aby si ich pri dalsom pridavani/uprave nemusel pisat znova od nuly. */
+  const positions=[...new Set(S.employees.map(e=>e.position).filter(Boolean))];
+  const positionList = `<datalist id="position-datalist">${positions.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
+  return invite+positionList+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
+    <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
+    ${S.employees.length?S.employees.map(e=>`
+      <div class="person">
+        <div>
+          <div class="pname">${esc(e.name)}</div>
+          <div class="pcode">${t('codeLbl')}: <b>${esc(e.access_code||'\u2014')}</b></div>
+          <div class="pcode">${loginInfo(e)}</div>
+          <div class="position-row">
+            <input type="text" class="position-edit" list="position-datalist"
+              value="${esc(e.position||'')}" placeholder="${t('positionPlaceholder')}"
+              data-act="position" data-id="${e.id}" aria-label="${t('position')}">
+          </div>
+        </div>
+        <div class="rate-edit">
+          <input type="number" step="0.10" min="0" value="${(+e.hourly_rate||0).toFixed(2)}"
+            data-act="rate" data-id="${e.id}" aria-label="${t('rate')}">
+          <span>${cur()}/${t('hUnit')}</span>
+        </div>
+        <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
+      </div>`).join(''):`<div class="empty"><p>${t('noPeople')}</p>
+        <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
+    ${supportPanel()}`;
+}
+/* ---------- NASTAVENIA \u2014 vsetko, co predtym prepchavalo sekciu Ludia:
+   kto zapisuje prichody, poloha/geofencing, QR plagat, stanica, cennik/predplatne,
+   a vzhlad appky (tmavy/svetly rezim). ---------- */
+function viewSettings(){
   const plan=planPanel();
   const mode=`<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('whoRecords')}</div>
@@ -2030,35 +2114,14 @@ function viewPeople(){
   const geo = geoPanel();
   const qr = qrPanel();
   const station = stationPanel();
-  const link = S.inviteCode
-    ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
-  const invite = `<div class="panel" style="margin-bottom:18px">
-    <div class="eyebrow" style="margin-bottom:10px">${t('addPerson')}</div>
-    <p class="help" style="margin:0 0 10px">${t('inviteHint')}</p>
-    <div class="invite-row">
-      <input id="invite-link" class="mono" readonly value="${esc(link)}" style="padding:12px">
-      <button class="btn ghost" data-act="copy-invite">${t('copyLink')}</button>
+  const theme = `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('themeTitle')}</div>
+    <div class="presets" style="grid-template-columns:1fr 1fr">
+      <button data-act="theme" data-v="dark" aria-pressed="${S.theme==='dark'}">${t('themeToDark')}</button>
+      <button data-act="theme" data-v="light" aria-pressed="${S.theme==='light'}">${t('themeToLight')}</button>
     </div>
-    <button class="linkish" data-act="regen-invite">${t('newInviteCode')}</button>
   </div>`;
-  return plan+mode+geo+qr+station+invite+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
-    <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
-    ${S.employees.length?S.employees.map(e=>`
-      <div class="person">
-        <div>
-          <div class="pname">${esc(e.name)}</div>
-          <div class="pcode">${t('codeLbl')}: <b>${esc(e.access_code||'\u2014')}</b></div>
-          <div class="pcode">${loginInfo(e)}</div>
-        </div>
-        <div class="rate-edit">
-          <input type="number" step="0.10" min="0" value="${(+e.hourly_rate||0).toFixed(2)}"
-            data-act="rate" data-id="${e.id}" aria-label="${t('rate')}">
-          <span>${cur()}/${t('hUnit')}</span>
-        </div>
-        <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
-      </div>`).join(''):`<div class="empty"><p>${t('noPeople')}</p>
-        <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
-    ${supportPanel()}`;
+  return `<div class="sec-head"><h2>${t('tabSettings')}</h2></div>`+plan+mode+geo+qr+station+theme;
 }
 /* ---------- platobne udaje pre vlastnika ---------- */
 /* Zamestnanec toto NIKDY nevidi — predplatne neplati on a emp_me mu ani
@@ -2082,10 +2145,10 @@ function payBlock(){
       <button data-act="pay-plan" data-v="mesacne" aria-pressed="${plan!=='rocne'}">${t('payMonthly')}</button>
       <button data-act="pay-plan" data-v="rocne" aria-pressed="${plan==='rocne'}">${t('payYearly')}<span class="pill">${t('recommended')}</span></button>
     </div>
-    ${plan==='rocne'?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('yearlyBonus')}</p>`:''}
+    ${plan==='rocne'?`<p class="help" style="margin:0 0 12px;color:var(--accent)">${t('yearlyBonus')}</p>`:''}
     <select class="langsel" data-act="pay-tier" aria-label="${t('yourPlan')}"
       style="width:100%;margin-bottom:12px">${planOptions}</select>
-    ${inyPlan?`<p class="help" style="margin:0 0 12px;color:var(--brass)">${t('payOtherPlan')}</p>`:''}
+    ${inyPlan?`<p class="help" style="margin:0 0 12px;color:var(--accent)">${t('payOtherPlan')}</p>`:''}
     <div class="paygrid">
       <span>${t('payRecipient')}</span><b>${esc(PAY_RECIPIENT)}</b>
       <span>${t('payIban')}</span><b>${esc(PAY_IBAN)}</b>
@@ -2115,8 +2178,8 @@ function viewAdmin(){
     let stav, farba;
     if(dni===null){ stav='bez obmedzenia'; farba=''; }
     else if(dni<-GRACE_DAYS){ stav=t('lockedTitle'); farba='color:#e08076'; }
-    else if(dni<0){ stav=t('subOverdue'); farba='color:var(--brass)'; }
-    else if(dni<=RENEW_WARN_DAYS){ stav=dni+' '+dayWord(dni); farba='color:var(--brass)'; }
+    else if(dni<0){ stav=t('subOverdue'); farba='color:var(--accent)'; }
+    else if(dni<=RENEW_WARN_DAYS){ stav=dni+' '+dayWord(dni); farba='color:var(--accent)'; }
     else { stav=dni+' '+dayWord(dni); farba=''; }
     return `<tr>
       <td><b>${esc(r.kod||'\u2013')}</b></td>
@@ -2183,7 +2246,7 @@ function geoPanel(){
       ${radiusy.map(r=>`<button data-act="geo-radius" data-v="${r}" aria-pressed="${S.geoRadius===r}">${r} m</button>`).join('')}
     </div>
     <button class="btn ghost" data-act="geo-here"${S.geoBusy?' disabled':''}>${S.geoBusy?t('geoWorking'):t('geoUseHere')}</button>
-    ${S.geoOn&&!mam?`<p class="help" style="margin:10px 0 0;color:var(--brass)">${t('geoWarnNoPlace')}</p>`:''}
+    ${S.geoOn&&!mam?`<p class="help" style="margin:10px 0 0;color:var(--accent)">${t('geoWarnNoPlace')}</p>`:''}
   </div>`;
 }
 /* ---------- vlastnik: QR plagat na stenu ---------- */
@@ -2658,6 +2721,7 @@ function openPersonModal(){
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
     <div class="fg">
       <div><label>${t('name')}</label><input id="p-name" autocomplete="off"></div>
+      <div><label>${t('position')}</label><input id="p-position" list="position-datalist" placeholder="${t('positionPlaceholder')}" autocomplete="off"></div>
       <div><label>${t('rate')} (€/h)</label><input id="p-rate" type="number" step="0.10" min="0" value="6.50" class="mono"></div>
     </div>
     <div class="sheet-act">
@@ -2689,7 +2753,7 @@ document.addEventListener('keydown',ev=>{
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
   'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
-  'qr-toggle','qr-copy','qr-print','my-qr'];
+  'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
@@ -2730,6 +2794,8 @@ document.addEventListener('click',async ev=>{
       try{ await DB.savePunchMode(v); toast(t('saved')); }catch(e){ dbErr(e); }
       render(); break;
     }
+    case 'theme': setTheme(el.dataset.v); render(); break;
+    case 'theme-toggle': setTheme(S.theme==='dark'?'light':'dark'); render(); break;
     case 'openday': S.dayOpen = S.dayOpen===el.dataset.v ? null : el.dataset.v; render(); break;
 
     case 'preset': {
@@ -3172,10 +3238,11 @@ document.addEventListener('click',async ev=>{
     case 'manage-sub': openSubModal(); break;
     case 'save-person': {
       const name=(document.getElementById('p-name').value||'').trim();
+      const position=(document.getElementById('p-position').value||'').trim();
       const rate=parseFloat(document.getElementById('p-rate').value)||0;
       if(!name){toast(t('nameRequired'));return;}
       try{
-        const e=await DB.addEmployee({name,hourly_rate:rate,access_code:makeCode()});
+        const e=await DB.addEmployee({name,position:position||null,hourly_rate:rate,access_code:makeCode()});
         S.employees.push(e); S.employees.sort((a,b)=>a.name.localeCompare(b.name));
         closeModal(); toast(t('added')); render();
       }catch(err){
@@ -3256,6 +3323,14 @@ document.addEventListener('change',async ev=>{
     try{
       await DB.updateEmployee(el.dataset.id,{hourly_rate:v});
       const e=empById(el.dataset.id); if(e)e.hourly_rate=v;
+      toast(t('saved'));
+    }catch(err){ dbErr(err); }
+  }
+  if(el.dataset&&el.dataset.act==='position'){
+    const v=(el.value||'').trim();
+    try{
+      await DB.updateEmployee(el.dataset.id,{position:v||null});
+      const e=empById(el.dataset.id); if(e)e.position=v||null;
       toast(t('saved'));
     }catch(err){ dbErr(err); }
   }
