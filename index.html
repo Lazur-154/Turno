@@ -1415,12 +1415,7 @@ function viewLanding(){
     </div>
 
     <div class="panel">
-      <div class="eyebrow" style="margin-bottom:10px">${t('watchDemo')}</div>
-      <div class="video-frame">${t('videoPlaceholder')}</div>
-    </div>
-
-    <div class="panel">
-      <div class="eyebrow" style="margin-bottom:8px">${t('aboutTitle')}</div>
+      <div class="eyebrow" style="margin-bottom:8px">${t('currentFeaturesTitle')}</div>
       <p class="help" style="margin:0 0 12px">${t('aboutBody')}</p>
       <ul class="feature-list">
         <li>${t('feat1')}</li>
@@ -1433,11 +1428,11 @@ function viewLanding(){
     ${installBlock()}
 
     <div class="panel">
-      <div class="plan-row">
-        <div class="eyebrow">${t('pricingTitle')}</div>
-        <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
-      </div>
-      <p class="help" style="margin:8px 0 0">${t('planFreeShort')} — ${t('planUpTo')} 3 ${t('peopleUsageLbl')}.</p>
+      <div class="eyebrow" style="margin-bottom:10px">${t('pricingTitle')}</div>
+      <div class="plan-tier-list">${PLAN_TIERS.map((tier,i)=>
+        `<div class="plan-tier-row"><span class="plan-tier-lbl"><span>${esc(tierLabel(tier,i))}</span><b>${esc(tierPriceLabel(tier,'mesacne'))}</b></span></div>`
+      ).join('')}</div>
+      <p class="help" style="margin:12px 0 0">${t('pricingChooseNote')}</p>
     </div>
 
     ${supportPanel()}
@@ -2584,7 +2579,8 @@ function viewMine(){
     </div>`;
   }
 
-  return `<div class="ribbon">
+  return `${me.position?`<div class="eyebrow" style="margin-bottom:10px">${esc(me.position)}</div>`:''}
+    <div class="ribbon">
       <div><div class="k">${t('myHours')}</div><div class="v">${num(h,1)}</div></div>
       <div><div class="k">${cur()}/${t('hUnit')}</div><div class="v">${num(+me.hourly_rate||0,2)}</div></div>
       <div><div class="k">${t('gross')}</div><div class="v money">${money(h*(+me.hourly_rate||0))}</div></div>
