@@ -447,6 +447,23 @@ body.locked{overflow:hidden}
 .login .logo{font-family:var(--disp);text-transform:uppercase;letter-spacing:.2em;font-size:34px;font-weight:700}
 .login .logo b{color:var(--accent)}
 .login .tag{color:var(--bone-dim);margin-top:2px;font-size:15px}
+
+/* ---------- marketingova uvodna stranka ---------- */
+.landing{min-height:100vh;min-height:100dvh;padding:32px var(--pad) 48px;max-width:480px;margin:0 auto;
+  display:flex;flex-direction:column;gap:18px}
+.landing-hero{text-align:center;padding-bottom:4px}
+.landing-hero .logo{font-family:var(--disp);text-transform:uppercase;letter-spacing:.2em;font-size:38px;font-weight:700}
+.landing-hero .logo b{color:var(--accent)}
+.landing-hero .tag{color:var(--bone-dim);margin-top:4px;font-size:16px}
+.landing-sub{margin:12px 0 0;font-size:15px;line-height:1.5}
+.landing-cta{display:flex;flex-direction:column;gap:10px;margin-top:20px}
+.video-frame{aspect-ratio:16/9;border:1px dashed var(--line);border-radius:var(--r);
+  display:flex;align-items:center;justify-content:center;text-align:center;padding:20px;
+  color:var(--bone-dim);font-size:14px;background:var(--ink-3)}
+.feature-list{list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:8px 14px}
+.feature-list li{font-size:14px;padding-left:20px;position:relative}
+.feature-list li::before{content:"✓";position:absolute;left:0;color:var(--verdigris);font-weight:700}
+@media(max-width:400px){.feature-list{grid-template-columns:1fr}}
 .seg{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .seg button{flex:1;padding:10px;font-family:var(--disp);text-transform:uppercase;letter-spacing:.09em;
   font-size:13px;font-weight:600;color:var(--bone-dim)}
@@ -685,7 +702,8 @@ const S = {
   stationToken:null,     // ?stanica=TOKEN — appka bezi ako skener, ziadne prihlasenie
   stationMsg:null,       // {ok, text} — posledny vysledok skenovania (docasne hlasenie)
   stationErr:null,       // chyba pri spustani kamery ('denied' | 'missing' | null)
-  theme:'dark'           // 'dark' | 'light' — len na tomto zariadeni (localStorage), nie v DB
+  theme:'dark',          // 'dark' | 'light' — len na tomto zariadeni (localStorage), nie v DB
+  landing:true           // ukaz najprv marketingovu uvodnu stranku, nie rovno prihlasenie
 };
 const t = k => T[S.lang][k];
 
@@ -1353,7 +1371,7 @@ const modalHost=document.getElementById('modal');
 
 function render(){
   if(S.stationToken){ root.innerHTML=viewStation(); return; }
-  if(!S.role){ root.innerHTML=viewLogin(); return; }
+  if(!S.role){ root.innerHTML = S.landing ? viewLanding() : viewLogin(); return; }
   setTimeout(()=>{ if(S.showQR && S.view==='settings') drawQR(); },0);
   const st = subState();
   S.readonly = (st==='locked');
@@ -1380,6 +1398,53 @@ function langSelect(id){
 }
 
 /* ---------- login ---------- */
+/* ---------- marketingova uvodna stranka (predtym nez sa niekto prihlasi) ----------
+   Ukazeme ju vzdy ako prve, okrem prichodu cez konkretny odkaz (pozyvaci kod,
+   naskenovany QR) — tam ide clovek rovno na spravny formular (viz boot()). */
+function viewLanding(){
+  return `<div class="landing">
+    <div class="landing-hero">
+      <div class="logo">turn<b>o</b></div>
+      <div class="tag">${t('tagline')}</div>
+      <p class="landing-sub">${t('heroSub')}</p>
+      <div class="landing-cta">
+        <button class="btn" style="padding:16px;font-size:16px" data-act="landing-go" data-v="owner">${t('signin')}</button>
+        <button class="btn ghost" style="padding:16px;font-size:16px" data-act="landing-go" data-v="owner-signup">${t('ctaRegister')}</button>
+        <button class="linkish" data-act="landing-go" data-v="employee">${t('imEmployee')}</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="eyebrow" style="margin-bottom:10px">${t('watchDemo')}</div>
+      <div class="video-frame">${t('videoPlaceholder')}</div>
+    </div>
+
+    <div class="panel">
+      <div class="eyebrow" style="margin-bottom:8px">${t('aboutTitle')}</div>
+      <p class="help" style="margin:0 0 12px">${t('aboutBody')}</p>
+      <ul class="feature-list">
+        <li>${t('feat1')}</li>
+        <li>${t('feat2')}</li>
+        <li>${t('feat3')}</li>
+        <li>${t('feat4')}</li>
+      </ul>
+    </div>
+
+    ${installBlock()}
+
+    <div class="panel">
+      <div class="plan-row">
+        <div class="eyebrow">${t('pricingTitle')}</div>
+        <button class="linkish" data-act="show-pricing">${t('viewPricing')}</button>
+      </div>
+      <p class="help" style="margin:8px 0 0">${t('planFreeShort')} — ${t('planUpTo')} 3 ${t('peopleUsageLbl')}.</p>
+    </div>
+
+    ${supportPanel()}
+
+    <div style="text-align:center"><label>${t('language')}</label>${langSelect('lang-landing')}</div>
+  </div>`;
+}
 function viewLogin(){
   let body;
   if(S.loginTab==='join')        body=viewJoin();
@@ -1388,6 +1453,7 @@ function viewLogin(){
   else                                  body=viewOwnerLogin();
   return `<div class="login">
     <div>
+      <button class="linkish" style="padding:6px 0" data-act="back-landing">${t('backToLanding')}</button>
       <div class="logo">turn<b>o</b></div>
       <div class="tag">${t('tagline')}</div>
     </div>
@@ -2753,7 +2819,7 @@ document.addEventListener('keydown',ev=>{
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
   'ltab','month','openday','pay-plan','pickday','show-pricing','signout','view','week',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
-  'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme'];
+  'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme','landing-go','back-landing'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
@@ -2796,6 +2862,8 @@ document.addEventListener('click',async ev=>{
     }
     case 'theme': setTheme(el.dataset.v); render(); break;
     case 'theme-toggle': setTheme(S.theme==='dark'?'light':'dark'); render(); break;
+    case 'landing-go': S.landing=false; S.loginTab=el.dataset.v; S.loginErr=''; S.signupDone=false; render(); break;
+    case 'back-landing': S.landing=true; render(); break;
     case 'openday': S.dayOpen = S.dayOpen===el.dataset.v ? null : el.dataset.v; render(); break;
 
     case 'preset': {
@@ -3124,7 +3192,7 @@ document.addEventListener('click',async ev=>{
       render(); break;
     }
     case 'signout':
-      await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null;
+      await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; S.landing=true; S.loginTab='owner';
       try{ localStorage.removeItem(EMP_CODE_KEY); }catch(e){}
       render(); break;
 
@@ -3363,9 +3431,9 @@ setInterval(()=>{
   S.stationToken=stationTokenFromUrl();
   if(S.stationToken){ render(); startStation(); return; }
   const jc=joinCodeFromUrl();
-  if(jc){ S.joinCode=jc; S.loginTab='join'; }
+  if(jc){ S.joinCode=jc; S.loginTab='join'; S.landing=false; }
   S.qrScanned=qrFromUrl();
-  if(S.qrScanned){ S.loginTab='employee'; clearQrFromUrl(); }
+  if(S.qrScanned){ S.loginTab='employee'; S.landing=false; clearQrFromUrl(); }
   if(LIVE){
     try{
       const ses=await DB.session();
