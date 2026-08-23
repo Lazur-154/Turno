@@ -687,6 +687,8 @@ const S = {
   calFilter:null,        // ak nastavene, Historia ukazuje len tohto zamestnanca
   planCursor:startOfMonth(new Date()),
   planPick:null,        // vybrany den v Plane (mesacny kalendar)
+  mineCursor:startOfMonth(new Date()),
+  minePick:null,        // vybrany den v "Moje zmeny" (zamestnancov vlastny kalendar)
   justStamped:null,
   detail:false,        // false = jednoduchy rezim (default)
   undo:null,           // {id, field} — kratke okno na vratenie
@@ -2597,11 +2599,36 @@ function viewMine(){
   const me=S.me;
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
   const all=S.shifts.filter(s=>s.employee_id===me.id);
+  // Ribbon hore (moje hodiny/brutto) je vzdy za aktualny kalendarny mesiac —
+  // nezavisle od toho, ktory mesiac si zamestnanec prave prehliada nizsie v mini-kalendari.
   const mine=all
-    .filter(s=>{const d=new Date(s.date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()===m})
-    .sort((a,b)=>b.date.localeCompare(a.date));
+    .filter(s=>{const d=new Date(s.date+'T00:00:00');return d.getFullYear()===y&&d.getMonth()===m});
   const h=mine.reduce((a,s)=>a+hoursOf(s),0);
   const bh=mine.reduce((a,s)=>a+breakHoursOf(s),0);
+
+  // Nadchadzajuce naplanovane zmeny — cez vsetky mesiace dopredu, nie len ten aktualny.
+  const upcoming=all.filter(s=>s.date>todayISO()).sort((a,b)=>a.date.localeCompare(b.date));
+
+  // Mesacny kalendar mojich zmien (prehliadatelny sipkami), klik na den rozbali detail nizsie —
+  // rovnaky vzor ako Historia (viewCal), ale len pre tohto zamestnanca.
+  const c=S.mineCursor, cy=c.getFullYear(), cm=c.getMonth();
+  const first=new Date(cy,cm,1), last=new Date(cy,cm+1,0);
+  const lead=(first.getDay()+6)%7;
+  const byDay={};
+  all.forEach(s=>{
+    const d=new Date(s.date+'T00:00:00');
+    if(d.getFullYear()===cy&&d.getMonth()===cm) byDay[s.date]=(byDay[s.date]||0)+hoursOf(s);
+  });
+  let mineCells='';
+  for(let i=0;i<lead;i++)mineCells+=`<div class="cell mute"></div>`;
+  for(let d=1;d<=last.getDate();d++){
+    const key=`${cy}-${pad(cm+1)}-${pad(d)}`;
+    const hh=byDay[key]||0;
+    mineCells+=`<button class="cell ${hh?'has':''} ${key===todayISO()?'today':''}"
+      data-act="mine-pick" data-v="${key}" aria-pressed="${S.minePick===key}">
+      <span class="d">${d}</span>${hh?`<span class="h">${num(hh,1)}</span>`:''}</button>`;
+  }
+  const mineDetail = S.minePick ? mineDayDetail(S.minePick) : '';
 
   // dnesne zmeny — s tlacidlami, ak to vlastnik povolil
   const today=all.filter(s=>s.date===todayISO())
@@ -2632,28 +2659,58 @@ function viewMine(){
     <button class="linkish" style="margin-bottom:16px" data-act="my-qr">▦ ${t('myQrBtn')}</button>
     ${todayBlock}
     ${bh>0?`<p class="plainline quiet">${t('breakTotal')}: ${durLong(bh)}</p>`:''}
-    <div class="sec-head"><h2>${t('myShifts')} \u00b7 ${T[S.lang].months[m]}</h2></div>
-    ${mine.length?mine.map(s=>{
+    ${upcoming.length?`<div class="sec-head"><h2>${t('upcomingShifts')}</h2></div>
+    ${upcoming.map(s=>{
       const d=new Date(s.date+'T00:00:00');
       const day=`${T[S.lang].dows[(d.getDay()+6)%7]} ${d.getDate()}. ${d.getMonth()+1}.`;
-      let right;
-      if(!s.arrival){
-        right=`<span class="tagl plan">${t('planLbl')}</span>
-               <span class="mono">${esc(planLabel(s))}</span>`;
-      }else if(!s.departure){
-        right=`<span class="tagl on">${t('atWorkSince')}</span>
-               <span class="mono">${hhmm(s.arrival)}</span>`;
-      }else{
-        const bb=breakHoursOf(s);
-        right=`<span>${durLong(hoursOf(s))}</span>
-               <span class="mono dim">${hhmm(s.arrival)}\u2013${hhmm(s.departure)}</span>
-               ${bb>0?`<span class="dim">${t('breaksLbl')} ${durLong(bb)}</span>`:''}`;
-      }
       return `<div class="shift-row" style="grid-template-columns:1fr">
         <div class="sr-name">${day}</div>
-        <div class="sr-state">${right}</div>
+        <div class="sr-state"><span class="tagl plan">${t('planLbl')}</span>
+          <span class="mono">${esc(planLabel(s))}</span></div>
       </div>`;
-    }).join(''):`<div class="empty">${t('noShifts')}</div>`}`;
+    }).join('')}`:''}
+    <div class="sec-head"><h2>${t('myShifts')}</h2></div>
+    <div class="nav-week">
+      <button data-act="mine-month" data-v="-1">\u2039</button>
+      <span class="lbl">${T[S.lang].months[cm]} ${cy}</span>
+      <button data-act="mine-month" data-v="1">\u203a</button>
+    </div>
+    <div class="cal">
+      ${T[S.lang].dows.map(x=>`<div class="dow">${x}</div>`).join('')}
+      ${mineCells}
+    </div>
+    ${mineDetail}`;
+}
+
+function mineDayDetail(key){
+  const list=S.shifts.filter(s=>s.employee_id===S.me.id && s.date===key)
+    .sort((a,b)=>(a.plan_start||'').localeCompare(b.plan_start||''));
+  const d=new Date(key+'T00:00:00');
+  const head=`${T[S.lang].dayNames[d.getDay()]} ${d.getDate()}. ${d.getMonth()+1}. ${d.getFullYear()}`;
+  if(!list.length)return `<div class="panel" style="margin-top:14px">
+    <div class="eyebrow">${head}</div>
+    <div style="color:var(--bone-dim);font-size:14px;margin-top:8px">${t('noRecord')}</div></div>`;
+  const rows=list.map(s=>{
+    let right;
+    if(!s.arrival){
+      right=`<span class="tagl plan">${t('planLbl')}</span>
+             <span class="mono">${esc(planLabel(s))}</span>`;
+    }else if(!s.departure){
+      right=`<span class="tagl on">${t('atWorkSince')}</span>
+             <span class="mono">${hhmm(s.arrival)}</span>`;
+    }else{
+      const bb=breakHoursOf(s);
+      right=`<span>${durLong(hoursOf(s))}</span>
+             <span class="mono dim">${hhmm(s.arrival)}\u2013${hhmm(s.departure)}</span>
+             ${bb>0?`<span class="dim">${t('breaksLbl')} ${durLong(bb)}</span>`:''}`;
+    }
+    return `<div class="shift-row" style="grid-template-columns:1fr">
+      <div class="sr-state">${right}</div>
+    </div>${brs(s).length?breakList(s,true):''}`;
+  }).join('');
+  return `<div class="panel" style="margin-top:14px">
+    <div class="eyebrow" style="margin-bottom:10px">${head}</div>
+    ${rows}</div>`;
 }
 
 /* ============================================================
@@ -2870,7 +2927,7 @@ document.addEventListener('keydown',ev=>{
    EVENTS
    ============================================================ */
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
-  'ltab','month','pay-plan','pickday','plan-month','plan-pick','show-pricing','signout','view',
+  'ltab','month','pay-plan','pickday','plan-month','plan-pick','mine-month','mine-pick','show-pricing','signout','view',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
   'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme','landing-go','back-landing'];
 document.addEventListener('click',async ev=>{
@@ -2907,6 +2964,9 @@ document.addEventListener('click',async ev=>{
     case 'plan-month': S.planCursor=new Date(S.planCursor.getFullYear(),S.planCursor.getMonth()+(+el.dataset.v),1);
                   S.planPick=null; render(); break;
     case 'plan-pick': S.planPick = S.planPick===el.dataset.v ? null : el.dataset.v; render(); break;
+    case 'mine-month': S.mineCursor=new Date(S.mineCursor.getFullYear(),S.mineCursor.getMonth()+(+el.dataset.v),1);
+                  S.minePick=null; render(); break;
+    case 'mine-pick': S.minePick = S.minePick===el.dataset.v ? null : el.dataset.v; render(); break;
     case 'detail': S.detail=!S.detail; render(); break;
     case 'mode': {
       const v=el.dataset.v;
