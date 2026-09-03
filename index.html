@@ -98,10 +98,15 @@ header.bar{
   border-bottom:1px solid var(--line);
   padding:calc(env(safe-area-inset-top) + 10px) var(--pad) 10px;
 }
-.bar-row{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.bar-row{display:flex;align-items:center;justify-content:space-between;gap:8px 12px;flex-wrap:wrap}
 .brand{font-family:var(--disp);font-weight:700;text-transform:uppercase;letter-spacing:.14em;font-size:20px}
 .brand b{color:var(--accent);font-weight:700}
-.bar-tools{display:flex;align-items:center;gap:8px}
+.bar-tools{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+@media(max-width:380px){
+  .bar-tools{gap:6px}
+  .icon-btn{padding:10px 10px;font-size:12px}
+  .langsel{padding:9px 8px;font-size:13px}
+}
 .lang{display:flex;border:1px solid var(--line);border-radius:var(--r);overflow:hidden}
 .lang button{font-family:var(--disp);font-weight:600;letter-spacing:.08em;font-size:13px;
   padding:12px 12px;min-height:44px;color:var(--bone-dim)}
@@ -396,6 +401,12 @@ tr.sum td:first-child{font-family:var(--disp);text-transform:uppercase;letter-sp
 .btn.small{padding:7px 11px;font-size:12px}
 .badge{font-family:var(--disp);text-transform:uppercase;letter-spacing:.07em;font-size:11px;font-weight:700;
   color:var(--verdigris);border:1px solid var(--verdigris);border-radius:var(--r);padding:5px 9px;white-space:nowrap}
+.paid-badge{display:inline-block;color:var(--verdigris);font-weight:700}
+.pay-day-list{max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:2px}
+.pay-day-row{display:grid;grid-template-columns:auto 1fr auto auto;gap:10px;align-items:center;
+  padding:10px 4px;border-bottom:1px solid var(--line)}
+.pay-day-row:last-child{border-bottom:none}
+.pay-day-date{font-size:14px}
 .presets{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .presets button{border:1px solid var(--line);border-radius:var(--r);padding:14px 10px;min-height:56px;
   font-family:var(--disp);text-transform:uppercase;letter-spacing:.06em;font-weight:600;font-size:14px;
@@ -682,6 +693,8 @@ const S = {
   employees:[],
   shifts:[],
   notes:[],
+  payments:[],          // zaznamy o vyplateni (kto, ktore dni, kolko, kedy)
+  geoPermState:'unknown', // stav opravnenia na polohu v prehliadaci: granted|denied|prompt|unsupported|unknown
   calCursor:startOfMonth(new Date()),
   calPick:null,
   calFilter:null,        // ak nastavene, Historia ukazuje len tohto zamestnanca
@@ -722,7 +735,16 @@ const S = {
   theme:'dark',          // 'dark' | 'light' — len na tomto zariadeni (localStorage), nie v DB
   landing:true           // ukaz najprv marketingovu uvodnu stranku, nie rovno prihlasenie
 };
-const t = k => T[S.lang][k];
+/* Ak preklad chyba v aktualnom jazyku (napr. novy kluc este nie je
+   prelozeny do vsetkych 9 jazykov), padneme na anglictinu a az potom
+   na samotny kluc — nech sa nikdy nezobrazi "undefined". */
+const t = k => {
+  const cur = T[S.lang];
+  if(cur && cur[k]!==undefined) return cur[k];
+  const en = T.en;
+  if(en && en[k]!==undefined) return en[k];
+  return k;
+};
 
 /* ---------------- tmavy / svetly rezim ----------------
    Cisto klientska vec (jedno zariadenie), preto localStorage a nie Supabase.
@@ -774,6 +796,22 @@ function getPos(timeoutMs){
       ()=>{ if(done)return; done=true; clearTimeout(t); resolve(null); },
       {enableHighAccuracy:true, timeout:timeoutMs||12000, maximumAge:30000});
   });
+}
+/* Zisti stav opravnenia na polohu bez toho, aby sme rovno pytali GPS
+   (getPos() by pri stave 'prompt' hned vyvolal natívnu otazku prehliadaca).
+   Vysledok si appka pamata v S.geoPermState a prekresli sa, ked sa zmeni —
+   napr. ked clovek povolenie zapne/vypne priamo v nastaveniach telefonu. */
+async function refreshGeoPermState(){
+  try{
+    if(!navigator.geolocation){ S.geoPermState='unsupported'; render(); return; }
+    if(!navigator.permissions || !navigator.permissions.query){ S.geoPermState='unknown'; render(); return; }
+    const st = await navigator.permissions.query({name:'geolocation'});
+    S.geoPermState = st.state;
+    if(!st.onchange){
+      st.onchange = () => { S.geoPermState = st.state; render(); };
+    }
+  }catch(e){ S.geoPermState='unknown'; }
+  render();
 }
 /* Predplatne: ak je platne_do v minulosti, appka sa zamkne.
    Prazdna hodnota = bez obmedzenia (demo, stare ucty). */
@@ -1023,6 +1061,15 @@ const DB = {
     if(error) throw error;
     return data.user;
   },
+  async signInGoogle(){
+    if(!LIVE) throw new Error('demo');
+    const {error} = await sb.auth.signInWithOAuth({
+      provider:'google',
+      options:{redirectTo: location.origin + location.pathname}
+    });
+    if(error) throw error;
+    /* Prehliadac po tomto hned odide na Google — nic dalsie tu uz nedobehne. */
+  },
   async signOut(){ if(LIVE&&sb) await sb.auth.signOut(); },
   async session(){
     if(!LIVE||!sb) return null;
@@ -1093,6 +1140,23 @@ const DB = {
   async removeNote(id){
     if(!LIVE){MEM.notes=MEM.notes.filter(n=>n.id!==id);return;}
     await sbop(()=>sb.from('notes').delete().eq('id',id));
+  },
+  /* --- vyplatene (zaznamy o tom, ze zamestnancovi uz bolo za dane dni zaplatene) --- */
+  async loadPayments(){
+    if(!LIVE) return (MEM.payments||[]).slice();
+    return sbop(()=>sb.from('payments').select('*').order('created_at',{ascending:false}));
+  },
+  async addPayment(row){
+    if(!LIVE){
+      const p={id:'pay'+Date.now(), created_at:new Date().toISOString(), ...row};
+      (MEM.payments=MEM.payments||[]).push(p); return p;
+    }
+    const payload = S.ownerId ? {...row, owner_id:S.ownerId} : row;
+    return sbop(()=>sb.from('payments').insert(payload).select().single());
+  },
+  async removePayment(id){
+    if(!LIVE){ if(MEM.payments) MEM.payments=MEM.payments.filter(p=>p.id!==id); return; }
+    await sbop(()=>sb.from('payments').delete().eq('id',id));
   },
   async addShift(row){
     if(!LIVE){const s={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),...row};MEM.shifts.push(s);return s;}
@@ -1296,7 +1360,7 @@ const MEM = {employees:[],shifts:[],notes:[
   {id:'n1',title:'Múka 25kg',details:'pre pekáreň, objednať do stredy',price:18.50,done:false,created_at:new Date(Date.now()-2*86400000).toISOString()},
   {id:'n2',title:'Olej do fritézy 10L',details:'',price:22,done:false,created_at:new Date(Date.now()-86400000).toISOString()},
   {id:'n3',title:'Obaly na donášku',details:'100ks, dodávateľ Packo',price:34.90,done:true,created_at:new Date(Date.now()-5*86400000).toISOString()}
-],settings:{punch_mode:'owner',invite_code:'DEM042',people_limit:3}};
+],payments:[],settings:{punch_mode:'owner',invite_code:'DEM042',people_limit:3}};
 function seedDemo(){
   const ago=m=>new Date(Date.now()-m*60000).toISOString();
   MEM.employees = [
@@ -1503,6 +1567,7 @@ function viewOwnerLogin(){
     </div>
     <div class="err">${esc(S.loginErr)}</div>
     <button class="btn" style="padding:18px;font-size:17px" data-act="signin-owner">${t('signin')}</button>
+    ${LIVE ? `<button class="btn ghost" style="padding:18px;font-size:17px" data-act="signin-google">${t('signInGoogle')}</button>` : ''}
     ${LIVE ? `<button class="linkish" data-act="ltab" data-v="owner-signup">${t('noAccountYet')}</button>`
            : `<button class="btn ghost" data-act="demo">${t('demoEnter')}</button>`}
     <button class="linkish" data-act="ltab" data-v="employee">${t('imEmployee')}</button>`;
@@ -1523,6 +1588,7 @@ function viewOwnerSignup(){
     </div>
     <div class="err">${esc(S.loginErr)}</div>
     <button class="btn" style="padding:18px;font-size:17px" data-act="signup-owner">${t('signUp')}</button>
+    ${LIVE ? `<button class="btn ghost" style="padding:18px;font-size:17px" data-act="signin-google">${t('signInGoogle')}</button>` : ''}
     <button class="linkish" data-act="ltab" data-v="owner">${t('haveAccountYet')}</button>`;
 }
 function viewEmployeeLogin(){
@@ -1917,9 +1983,11 @@ function dayDetail(key){
     const e=empById(s.employee_id);if(!e)return'';
     const h=hoursOf(s), c=h*(+e.hourly_rate||0); sh+=h; sc+=c;
     const bb=breakHoursOf(s);
+    const isPaid = s.departure && paidDatesForEmp(e.id).has(s.date);
     return `<tr><td>${esc(e.name)}</td><td>${hhmm(s.arrival)}</td>
       <td>${s.departure?hhmm(s.departure):'\u2026'}</td>
-      <td>${bb>0?num(bb,1):'\u2013'}</td><td>${num(h,1)}</td><td>${money(c)}</td>
+      <td>${bb>0?num(bb,1):'\u2013'}</td><td>${num(h,1)}</td>
+      <td>${money(c)}${isPaid?` <span class="paid-badge" title="${esc(t('paidLbl'))}">\u2713</span>`:''}</td>
       <td style="text-align:right"><button class="sr-edit" data-act="fix" data-id="${s.id}">${t('fix')}</button></td></tr>
       ${brs(s).length?`<tr class="brk-tr"><td colspan="7">${breakList(s,true)}</td></tr>`:''}`;
   }).join('');
@@ -1963,16 +2031,18 @@ function exportMonthCsv(){
     .sort((a,b)=> a.e.name.localeCompare(b.e.name,'sk') || a.s.date.localeCompare(b.s.date));
 
   const lines=[];
-  lines.push(csvLine(['Meno','Dátum','Príchod','Odchod','Prestávka (h)','Odpracované (h)','Sadzba (€/h)','Suma (€)']));
+  lines.push(csvLine(['Meno','Dátum','Príchod','Odchod','Prestávka (h)','Odpracované (h)','Sadzba (€/h)','Suma (€)','Vyplatené']));
   inMonth.forEach(({s,e})=>{
     const h=hoursOf(s), br=breakHoursOf(s), rate=+e.hourly_rate||0;
     const dd=new Date(s.date+'T00:00:00');
+    const isPaid = s.departure && paidDatesForEmp(e.id).has(s.date);
     lines.push(csvLine([
       e.name,
       pad(dd.getDate())+'.'+pad(dd.getMonth()+1)+'.'+dd.getFullYear(),
       hhmm(s.arrival),
       s.departure ? hhmm(s.departure) : '',
-      num(br,2), num(h,2), num(rate,2), num(h*rate,2)
+      num(br,2), num(h,2), num(rate,2), num(h*rate,2),
+      isPaid ? 'Áno' : 'Nie'
     ]));
   });
 
@@ -1993,6 +2063,26 @@ function exportMonthCsv(){
     lines.push(csvLine([e.name, num(h,2), num(c2,2)]));
   });
   lines.push(csvLine(['Spolu', num(sumH,2), num(sumC,2)]));
+
+  /* Zaznamy o vyplateni — nech je aj vo vytlacenom/exportovanom prehlade
+     jasne vidno, ze bolo zaplatene, komu, kolko a kedy presne to majitel
+     zaznamenal (nie len ktore dni to pokryva). */
+  const payRows = (S.payments||[]).slice().sort((a,b)=>(a.created_at||'').localeCompare(b.created_at||''));
+  if(payRows.length){
+    lines.push('');
+    lines.push(csvLine(['VYPLATENÉ (záznamy o výplatách)']));
+    lines.push(csvLine(['Meno','Vyplatené dni','Suma (€)','Kedy zaznamenané']));
+    payRows.forEach(p=>{
+      const e=empById(p.employee_id); if(!e) return;
+      const dates=(Array.isArray(p.dates)?p.dates:[]).slice().sort();
+      if(!dates.length) return;
+      const rangeLbl = dates.length<=1
+        ? fmtDay(dates[0])
+        : fmtDay(dates[0])+' – '+fmtDay(dates[dates.length-1])+' ('+dates.length+' dní)';
+      const when = p.created_at ? fmtDay(p.created_at)+' '+hhmm(p.created_at) : '';
+      lines.push(csvLine([e.name, rangeLbl, num(+p.amount||0,2), when]));
+    });
+  }
 
   downloadTextFile('turno-mzdy-'+y+'-'+pad(m+1)+'.csv', lines.join('\r\n'));
 }
@@ -2163,6 +2253,69 @@ function openNoteModal(edit){
     </div>
   </div></div>`);
 }
+/* ---------- VYPLATENÉ ----------
+   Zoznam dni, ktore uz nejaka vyplata pokryva (naprieč vsetkymi zaznamami
+   toho zamestnanca) — pouziva sa aj na zvyrazenie v kalendari, aj na to,
+   aby sa uz vyplatene dni druhy krat neponukali na vyber. */
+function paidDatesForEmp(employeeId){
+  const set=new Set();
+  (S.payments||[]).forEach(p=>{
+    if(p.employee_id!==employeeId) return;
+    (Array.isArray(p.dates)?p.dates:[]).forEach(d=>set.add(d));
+  });
+  return set;
+}
+/* Odpracovane (dokoncene) zmeny tohto zamestnanca, za ktore este nebolo
+   zaznamenane vyplatenie — zoradene od najnovsich, nech ma majitel hned
+   pri ruke ten najbeznejsi pripad (vyplatit poslednych par dni). */
+function unpaidShiftsForEmp(employeeId){
+  const paid=paidDatesForEmp(employeeId);
+  return S.shifts
+    .filter(s=>s.employee_id===employeeId && s.departure && !paid.has(s.date))
+    .sort((a,b)=>b.date.localeCompare(a.date));
+}
+/* Celkovo zarobene (vsetky dokoncene zmeny × aktualna sadzba — appka si
+   historicku sadzbu nepamata, rovnaky zjednodusujuci princip ako CSV export),
+   uz vyplatene, a rozdiel = kolko sa este ma vyplatit. */
+function empTotals(e){
+  const rate=+e.hourly_rate||0;
+  const earned=S.shifts.filter(s=>s.employee_id===e.id && s.departure)
+    .reduce((a,s)=>a+hoursOf(s)*rate,0);
+  const paid=(S.payments||[]).filter(p=>p.employee_id===e.id)
+    .reduce((a,p)=>a+(+p.amount||0),0);
+  return {earned, paid, remaining: Math.max(0, earned-paid)};
+}
+function payModalBody(employeeId){
+  const e=empById(employeeId); if(!e) return '';
+  const rate=+e.hourly_rate||0;
+  const unpaid=unpaidShiftsForEmp(employeeId);
+  const totalAll=unpaid.reduce((a,s)=>a+hoursOf(s)*rate,0);
+  const rows=unpaid.map(s=>{
+    const h=hoursOf(s), amt=h*rate;
+    return `<label class="pay-day-row">
+      <input type="checkbox" class="pay-day-cb" data-act="pay-day" data-date="${s.date}" data-amt="${amt.toFixed(2)}" checked>
+      <span class="pay-day-date">${fmtDay(s.date)}</span>
+      <span class="mono pay-day-h">${num(h,1)} ${t('hUnit')}</span>
+      <span class="mono pay-day-amt">${money(amt)}</span>
+    </label>`;
+  }).join('');
+  return `<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('payOutTitle')} — ${esc(e.name)}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    ${unpaid.length ? `
+      <p class="help" style="margin:0 0 10px">${t('payOutHint')}</p>
+      <div class="pay-day-list" id="pay-day-list">${rows}</div>
+      <div class="paygrid" style="margin:14px 0">
+        <span>${t('total')}</span><b id="pay-total-amt">${money(totalAll)}</b>
+      </div>
+      <div class="sheet-act">
+        <button class="btn ghost" data-act="close">${t('cancel')}</button>
+        <button class="btn" data-act="pay-confirm" data-id="${employeeId}">${t('payOutConfirm')}</button>
+      </div>`
+    : `<p class="help" style="margin:0 0 10px">${t('payOutNone')}</p>
+      <div class="sheet-act"><button class="btn ghost" data-act="close">${t('cancel')}</button></div>`}
+  </div></div>`;
+}
 function viewPeople(){
   const link = S.inviteCode
     ? `${location.origin}${location.pathname}?join=${encodeURIComponent(S.inviteCode)}&lang=${S.lang}` : '';
@@ -2181,7 +2334,9 @@ function viewPeople(){
   const positionList = `<datalist id="position-datalist">${positions.map(p=>`<option value="${esc(p)}">`).join('')}</datalist>`;
   return invite+positionList+`<div class="sec-head"><h2>${t('tabPeople')}</h2>
     <button class="btn" data-act="new-person">+ ${t('addPerson')}</button></div>
-    ${S.employees.length?S.employees.map(e=>`
+    ${S.employees.length?S.employees.map(e=>{
+      const pt=empTotals(e);
+      return `
       <div class="person">
         <div>
           <div class="pname">${esc(e.name)}</div>
@@ -2192,14 +2347,17 @@ function viewPeople(){
               value="${esc(e.position||'')}" placeholder="${t('positionPlaceholder')}"
               data-act="position" data-id="${e.id}" aria-label="${t('position')}">
           </div>
+          <div class="pcode" style="margin-top:6px">${t('remainingLbl')}: <b${pt.remaining>0?' style="color:var(--accent)"':''}>${money(pt.remaining)}</b>
+            ${pt.paid>0?` \u00b7 ${t('paidLbl')}: <b>${money(pt.paid)}</b>`:''}</div>
         </div>
         <div class="rate-edit">
           <input type="number" step="0.10" min="0" value="${(+e.hourly_rate||0).toFixed(2)}"
             data-act="rate" data-id="${e.id}" aria-label="${t('rate')}">
           <span>${cur()}/${t('hUnit')}</span>
         </div>
+        <button class="btn ghost" data-act="pay-open" data-id="${e.id}">\ud83d\udcb6 ${t('payOutBtn')}</button>
         <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
-      </div>`).join(''):`<div class="empty"><p>${t('noPeople')}</p>
+      </div>`;}).join(''):`<div class="empty"><p>${t('noPeople')}</p>
         <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
     ${supportPanel()}`;
 }
@@ -2595,6 +2753,23 @@ function myCard(sh){
   </div>`;
 }
 
+/* Poloha je pri instalovanej appke (WebAPK) v Nastaveniach telefonu vidno
+   len vtedy, ked si o nu appka aspon raz pozadala. Kym sa tak nestane,
+   clovek ju tam nema jak "pridat" — presne na to sluzi toto tlacidlo:
+   vyvola natívnu otazku prehliadaca priamo, mimo momentu prichodu/odchodu. */
+function geoStatusBlock(){
+  if(S.geoPermState==='granted'){
+    return `<p class="help" style="margin:0 0 16px;color:var(--accent)">📍 ${t('geoGranted')}</p>`;
+  }
+  if(S.geoPermState==='denied'){
+    return `<div class="panel" style="margin-bottom:16px">
+      <div class="eyebrow" style="margin-bottom:6px;color:var(--accent)">${t('geoDeniedTitle')}</div>
+      <p class="help" style="margin:0 0 10px">${t('geoDeniedHelp')}</p>
+      <button class="btn ghost" data-act="geo-enable">${t('geoEnableBtn')}</button>
+    </div>`;
+  }
+  return `<button class="linkish" style="margin-bottom:16px;display:block" data-act="geo-enable">📍 ${t('geoEnableBtn')}</button>`;
+}
 function viewMine(){
   const me=S.me;
   const now=new Date(), y=now.getFullYear(), m=now.getMonth();
@@ -2657,6 +2832,7 @@ function viewMine(){
       <div><div class="k">${t('gross')}</div><div class="v money">${money(h*(+me.hourly_rate||0))}</div></div>
     </div>
     <button class="linkish" style="margin-bottom:16px" data-act="my-qr">▦ ${t('myQrBtn')}</button>
+    ${(S.punchMode==='self' && S.geoOn) ? geoStatusBlock() : ''}
     ${todayBlock}
     ${bh>0?`<p class="plainline quiet">${t('breakTotal')}: ${durLong(bh)}</p>`:''}
     ${upcoming.length?`<div class="sec-head"><h2>${t('upcomingShifts')}</h2></div>
@@ -2929,7 +3105,7 @@ document.addEventListener('keydown',ev=>{
 const RO_ALLOWED = ['close','scrim','copy-iban','copy-invite','detail','install-app','lang',
   'ltab','month','pay-plan','pickday','plan-month','plan-pick','mine-month','mine-pick','show-pricing','signout','view',
   'signin-owner','signin-emp','signup-owner','do-join','demo',
-  'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme','landing-go','back-landing'];
+  'qr-toggle','qr-copy','qr-print','my-qr','theme-toggle','theme','landing-go','back-landing','geo-enable','signin-google'];
 document.addEventListener('click',async ev=>{
   const el=ev.target.closest('[data-act]'); if(!el)return;
   const a=el.dataset.act;
@@ -3038,7 +3214,12 @@ document.addEventListener('click',async ev=>{
         el.disabled=true; toast(t('geoLocating'));
         pos=await getPos();
         el.disabled=false;
-        if(!pos){ toast(t('geoNoFix')); break; }
+        if(!pos){
+          await refreshGeoPermState();
+          if(S.geoPermState==='denied') toastLong(t('geoDeniedHelp'));
+          else toast(t('geoNoFix'));
+          break;
+        }
       }
       try{
         const upd=await DB.empPunch(S.myCode, id, map[a], pos, S.qrScanned);
@@ -3124,10 +3305,17 @@ document.addEventListener('click',async ev=>{
 
     case 'demo': {
       seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
+      try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
       const st=await DB.loadSettings(); applySettings(st);
       S.role='owner'; S.view='today'; render(); break;
     }
 
+    case 'signin-google': {
+      if(!LIVE){ S.loginErr=t('demoNote'); render(); return; }
+      try{ await DB.signInGoogle(); }
+      catch(e){ S.loginErr=t('badLogin'); render(); }
+      break;
+    }
     case 'signin-owner': {
       const email=(document.getElementById('li-email').value||'').trim();
       const pass=document.getElementById('li-pass').value||'';
@@ -3135,6 +3323,7 @@ document.addEventListener('click',async ev=>{
       try{
         await DB.signIn(email,pass);
         S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
+        try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
         try{ const st=await DB.loadSettings(); applySettings(st); }catch(e){}
         S.role='owner'; S.loginErr=''; render();
       }catch(e){ S.loginErr=t('badLogin'); render(); }
@@ -3176,6 +3365,7 @@ document.addEventListener('click',async ev=>{
         try{ localStorage.setItem(EMP_CODE_KEY, res.access_code); }catch(e){}
         clearJoinFromUrl();
         render();
+        if(S.geoOn) refreshGeoPermState();
       }catch(err){
         S.loginErr=t('joinBadCode'); render();
       }
@@ -3222,6 +3412,17 @@ document.addEventListener('click',async ev=>{
         toast(t('geoSaved'));
       }catch(err){ dbErr(err); }
       render();
+      break;
+    }
+    case 'geo-enable': {
+      /* Priame vyvolanie ziadosti o polohu, mimo zapisovania prichodu/odchodu —
+         nech si to clovek moze vybavit vopred a nie az ked mu to zablokuje pichnutie. */
+      toast(t('geoLocating'));
+      const pos = await getPos();
+      await refreshGeoPermState();
+      if(pos) toast(t('geoGranted'));
+      else if(S.geoPermState==='denied') toastLong(t('geoDeniedHelp'));
+      else toast(t('geoNoFix'));
       break;
     }
     case 'qr-toggle': S.showQR=!S.showQR; render(); break;
@@ -3303,7 +3504,7 @@ document.addEventListener('click',async ev=>{
       S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
       S.role='employee'; S.loginErr='';
       try{ localStorage.setItem(EMP_CODE_KEY, code); }catch(e){}
-      render(); break;
+      render(); if(S.geoOn) refreshGeoPermState(); break;
     }
     case 'signout':
       await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; S.landing=true; S.loginTab='owner';
@@ -3451,6 +3652,24 @@ document.addEventListener('click',async ev=>{
       }catch(err){ dbErr(err); }
       break;
     }
+    case 'pay-open': openModal(payModalBody(el.dataset.id)); break;
+    case 'pay-confirm': {
+      const employeeId=el.dataset.id;
+      const list=document.getElementById('pay-day-list');
+      const checked = list ? Array.from(list.querySelectorAll('.pay-day-cb:checked')) : [];
+      if(!checked.length){ toast(t('payOutNone')); break; }
+      const dates = checked.map(cb=>cb.dataset.date);
+      const amount = checked.reduce((a,cb)=>a+(parseFloat(cb.dataset.amt)||0),0);
+      el.disabled=true;
+      try{
+        const row = await DB.addPayment({employee_id:employeeId, dates, amount:+amount.toFixed(2)});
+        (S.payments=S.payments||[]).push(row || {id:'pay'+Date.now(), employee_id:employeeId, dates, amount:+amount.toFixed(2), created_at:new Date().toISOString()});
+        closeModal();
+        toast(t('payOutDone'));
+        render();
+      }catch(err){ el.disabled=false; dbErr(err); }
+      break;
+    }
     case 'new-note': openNoteModal(); break;
     case 'edit-note': {
       const n=(S.notes||[]).find(x=>x.id===el.dataset.id);
@@ -3516,6 +3735,14 @@ document.addEventListener('change',async ev=>{
       toast(t('saved'));
     }catch(err){ dbErr(err); }
   }
+  if(el.dataset&&el.dataset.act==='pay-day'){
+    const list=document.getElementById('pay-day-list');
+    let sum=0;
+    if(list) list.querySelectorAll('.pay-day-cb:checked').forEach(cb=>sum+=parseFloat(cb.dataset.amt)||0);
+    const out=document.getElementById('pay-total-amt');
+    if(out) out.textContent=money(sum);
+    return;
+  }
   if(el.dataset&&el.dataset.act==='position'){
     const v=(el.value||'').trim();
     try{
@@ -3563,6 +3790,7 @@ setInterval(()=>{
         S.employees=await DB.loadEmployees();
         S.shifts=await DB.loadShifts();
         try{ S.notes=await DB.loadNotes(); }catch(e){}
+        try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
         try{ const st=await DB.loadSettings(); applySettings(st); }catch(e){}
         S.role='owner';
       }
@@ -3595,6 +3823,7 @@ setInterval(()=>{
     }
   }
   render();
+  if(S.role==='employee' && S.geoOn) refreshGeoPermState();
   /* Navrat zo Stripe Checkoutu/portálu — webhook, ktory realne aktualizuje
      people_limit v Supabase, moze dobehnut o pár sekúnd neskor ako presmerovanie
      spat do appky, tak to na zaciatku par-krat skusime dotiahnut. */

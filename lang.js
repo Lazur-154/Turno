@@ -83,7 +83,15 @@ sk:{ label:'Slovenčina', locale:'sk-SK', cur:'€',
   copyLink:'Kopírovať odkaz', linkCopied:'Odkaz skopírovaný', newInviteCode:'Nový kód',
   regenConfirm:'Vygenerovať nový pozývací odkaz? Starý prestane fungovať.',
   reconnecting:'Obnovujem spojenie…',
-  unclosedShifts:'Nezavreté zmeny z minulosti', unclosedSince:'nezavretá od'
+  unclosedShifts:'Nezavreté zmeny z minulosti', unclosedSince:'nezavretá od',
+  geoGranted:'Poloha je povolená', geoDeniedTitle:'Poloha je blokovaná',
+  geoDeniedHelp:'Prehliadač zablokoval prístup k polohe. Over v telefóne: Nastavenia → Aplikácie → Turno (alebo Chrome) → Povolenia → Poloha → Povoliť. Ak appku Turno v zozname nevidíš, otvor turno.sk v bežnom prehliadači, klikni na ikonu zámku vedľa adresy, povoľ tam polohu, appku na ploche potom zavri a znova otvor.',
+  geoEnableBtn:'Povoliť polohu',
+  remainingLbl:'Zostáva vyplatiť', paidLbl:'Vyplatené',
+  payOutBtn:'Vyplatiť', payOutTitle:'Vyplatenie',
+  payOutHint:'Vyber dni, ktoré chceš teraz vyplatiť. Appka si zapamätá presný čas, kedy si to zaznamenal.',
+  payOutConfirm:'Vyplatiť vybrané', payOutNone:'Žiadne nevyplatené dni.', payOutDone:'Vyplatenie zaznamenané',
+  signInGoogle:'Pokračovať cez Google'
 },
 
 /* ---------------- ČEŠTINA ---------------- */
@@ -163,7 +171,15 @@ cs:{ label:'Čeština', locale:'cs-CZ', cur:'Kč',
   copyLink:'Kopírovat odkaz', linkCopied:'Odkaz zkopírován', newInviteCode:'Nový kód',
   regenConfirm:'Vygenerovat nový zvací odkaz? Starý přestane fungovat.',
   reconnecting:'Obnovuji spojení…',
-  unclosedShifts:'Nezavřené směny z minulosti', unclosedSince:'nezavřená od'
+  unclosedShifts:'Nezavřené směny z minulosti', unclosedSince:'nezavřená od',
+  geoGranted:'Poloha je povolena', geoDeniedTitle:'Poloha je blokována',
+  geoDeniedHelp:'Prohlížeč zablokoval přístup k poloze. Zkontroluj v telefonu: Nastavení → Aplikace → Turno (nebo Chrome) → Oprávnění → Poloha → Povolit. Pokud Turno v seznamu nevidíš, otevři turno.sk v běžném prohlížeči, klikni na ikonu zámku vedle adresy, povol tam polohu, appku na ploše pak zavři a znovu otevři.',
+  geoEnableBtn:'Povolit polohu',
+  remainingLbl:'Zbývá vyplatit', paidLbl:'Vyplaceno',
+  payOutBtn:'Vyplatit', payOutTitle:'Vyplacení',
+  payOutHint:'Vyber dny, které chceš teď vyplatit. Aplikace si zapamatuje přesný čas, kdy jsi to zaznamenal.',
+  payOutConfirm:'Vyplatit vybrané', payOutNone:'Žádné nevyplacené dny.', payOutDone:'Vyplacení zaznamenáno',
+  signInGoogle:'Pokračovat přes Google'
 },
 
 /* ---------------- POLSKI ---------------- */
@@ -243,7 +259,15 @@ pl:{ label:'Polski', locale:'pl-PL', cur:'zł',
   copyLink:'Kopiuj link', linkCopied:'Link skopiowany', newInviteCode:'Nowy kod',
   regenConfirm:'Wygenerować nowy link zaproszenia? Stary przestanie działać.',
   reconnecting:'Wznawiam połączenie…',
-  unclosedShifts:'Niezamknięte zmiany z przeszłości', unclosedSince:'niezamknięta od'
+  unclosedShifts:'Niezamknięte zmiany z przeszłości', unclosedSince:'niezamknięta od',
+  geoGranted:'Lokalizacja jest włączona', geoDeniedTitle:'Lokalizacja jest zablokowana',
+  geoDeniedHelp:'Przeglądarka zablokowała dostęp do lokalizacji. Sprawdź w telefonie: Ustawienia → Aplikacje → Turno (lub Chrome) → Uprawnienia → Lokalizacja → Zezwól. Jeśli Turno nie widnieje na liście, otwórz turno.sk w zwykłej przeglądarce, kliknij ikonę kłódki obok adresu, zezwól tam na lokalizację, a następnie zamknij i ponownie otwórz aplikację na ekranie głównym.',
+  geoEnableBtn:'Włącz lokalizację',
+  remainingLbl:'Pozostało do wypłaty', paidLbl:'Wypłacono',
+  payOutBtn:'Wypłać', payOutTitle:'Wypłata',
+  payOutHint:'Wybierz dni, które chcesz teraz wypłacić. Aplikacja zapamięta dokładny czas, kiedy to zrobiłeś.',
+  payOutConfirm:'Wypłać zaznaczone', payOutNone:'Brak niewypłaconych dni.', payOutDone:'Wypłata zapisana',
+  signInGoogle:'Kontynuuj z Google'
 },
 
 /* ---------------- MAGYAR ---------------- */
@@ -323,7 +347,15 @@ hu:{ label:'Magyar', locale:'hu-HU', cur:'Ft',
   copyLink:'Link másolása', linkCopied:'Link másolva', newInviteCode:'Új kód',
   regenConfirm:'Új meghívó linket generálunk? A régi megszűnik működni.',
   reconnecting:'Kapcsolat helyreállítása…',
-  unclosedShifts:'Lezáratlan műszakok a múltból', unclosedSince:'lezáratlan ekkortól:'
+  unclosedShifts:'Lezáratlan műszakok a múltból', unclosedSince:'lezáratlan ekkortól:',
+  geoGranted:'A helymeghatározás engedélyezve van', geoDeniedTitle:'A helymeghatározás blokkolva van',
+  geoDeniedHelp:'A böngésző blokkolta a helyhozzáférést. Ellenőrizd a telefonon: Beállítások → Alkalmazások → Turno (vagy Chrome) → Engedélyek → Helymeghatározás → Engedélyezés. Ha a Turno nem szerepel a listában, nyisd meg a turno.sk oldalt egy normál böngészőlapon, koppints a lakat ikonra a cím mellett, engedélyezd ott a helymeghatározást, majd zárd be és nyisd meg újra az alkalmazást a kezdőképernyőn.',
+  geoEnableBtn:'Helymeghatározás engedélyezése',
+  remainingLbl:'Még fizetendő', paidLbl:'Kifizetve',
+  payOutBtn:'Kifizetés', payOutTitle:'Kifizetés',
+  payOutHint:'Válaszd ki, mely napokat szeretnéd most kifizetni. Az alkalmazás megjegyzi a pontos időpontot, amikor ezt rögzítetted.',
+  payOutConfirm:'Kijelöltek kifizetése', payOutNone:'Nincs kifizetetlen nap.', payOutDone:'Kifizetés rögzítve',
+  signInGoogle:'Folytatás Google-lal'
 },
 
 /* ---------------- DEUTSCH ---------------- */
@@ -403,7 +435,15 @@ de:{ label:'Deutsch', locale:'de-DE', cur:'€',
   copyLink:'Link kopieren', linkCopied:'Link kopiert', newInviteCode:'Neuer Code',
   regenConfirm:'Neuen Einladungslink erzeugen? Der alte funktioniert dann nicht mehr.',
   reconnecting:'Verbindung wird wiederhergestellt…',
-  unclosedShifts:'Offene Schichten aus der Vergangenheit', unclosedSince:'offen seit'
+  unclosedShifts:'Offene Schichten aus der Vergangenheit', unclosedSince:'offen seit',
+  geoGranted:'Standort ist aktiviert', geoDeniedTitle:'Standort ist blockiert',
+  geoDeniedHelp:'Der Browser hat den Standortzugriff blockiert. Prüfe auf dem Handy: Einstellungen → Apps → Turno (oder Chrome) → Berechtigungen → Standort → Zulassen. Falls Turno dort nicht auftaucht, öffne turno.sk in einem normalen Browser-Tab, tippe auf das Schloss-Symbol neben der Adresse, erlaube dort den Standort, schließe die App auf dem Startbildschirm danach und öffne sie erneut.',
+  geoEnableBtn:'Standort aktivieren',
+  remainingLbl:'Noch offen', paidLbl:'Ausgezahlt',
+  payOutBtn:'Auszahlen', payOutTitle:'Auszahlung',
+  payOutHint:'Wähle die Tage aus, die du jetzt auszahlen möchtest. Die App merkt sich genau, wann du das gemacht hast.',
+  payOutConfirm:'Auswahl auszahlen', payOutNone:'Keine offenen Tage.', payOutDone:'Auszahlung gespeichert',
+  signInGoogle:'Weiter mit Google'
 },
 
 /* ---------------- ENGLISH ---------------- */
@@ -483,7 +523,15 @@ en:{ label:'English', locale:'en-GB', cur:'€',
   copyLink:'Copy link', linkCopied:'Link copied', newInviteCode:'New code',
   regenConfirm:'Generate a new invite link? The old one will stop working.',
   reconnecting:'Reconnecting…',
-  unclosedShifts:'Unclosed shifts from the past', unclosedSince:'still open since'
+  unclosedShifts:'Unclosed shifts from the past', unclosedSince:'still open since',
+  geoGranted:'Location is enabled', geoDeniedTitle:'Location is blocked',
+  geoDeniedHelp:"The browser blocked location access. Check on your phone: Settings → Apps → Turno (or Chrome) → Permissions → Location → Allow. If Turno doesn't appear in that list, open turno.sk in a regular browser tab, tap the lock icon next to the address, allow Location there, then close and reopen the app on your home screen.",
+  geoEnableBtn:'Enable location',
+  remainingLbl:'Still owed', paidLbl:'Paid',
+  payOutBtn:'Pay out', payOutTitle:'Pay out',
+  payOutHint:'Pick the days you want to pay out now. The app records the exact time you did this.',
+  payOutConfirm:'Pay out selected', payOutNone:'No unpaid days.', payOutDone:'Payment recorded',
+  signInGoogle:'Continue with Google'
 },
 
 /* ---------------- HRVATSKI ---------------- */
@@ -563,7 +611,15 @@ hr:{ label:'Hrvatski', locale:'hr-HR', cur:'€',
   copyLink:'Kopiraj link', linkCopied:'Link kopiran', newInviteCode:'Novi kod',
   regenConfirm:'Generirati novi pozivni link? Stari više neće raditi.',
   reconnecting:'Obnavljam vezu…',
-  unclosedShifts:'Nezatvorene smjene iz prošlosti', unclosedSince:'nezatvorena od'
+  unclosedShifts:'Nezatvorene smjene iz prošlosti', unclosedSince:'nezatvorena od',
+  geoGranted:'Lokacija je omogućena', geoDeniedTitle:'Lokacija je blokirana',
+  geoDeniedHelp:'Preglednik je blokirao pristup lokaciji. Provjeri na telefonu: Postavke → Aplikacije → Turno (ili Chrome) → Dozvole → Lokacija → Dopusti. Ako Turno nije na popisu, otvori turno.sk u običnom pregledniku, dodirni ikonu lokota pored adrese, tamo dopusti lokaciju, a zatim zatvori i ponovno otvori aplikaciju na početnom zaslonu.',
+  geoEnableBtn:'Omogući lokaciju',
+  remainingLbl:'Preostalo za isplatu', paidLbl:'Isplaćeno',
+  payOutBtn:'Isplati', payOutTitle:'Isplata',
+  payOutHint:'Odaberi dane koje sada želiš isplatiti. Aplikacija pamti točno vrijeme kada si to zabilježio.',
+  payOutConfirm:'Isplati odabrano', payOutNone:'Nema neisplaćenih dana.', payOutDone:'Isplata zabilježena',
+  signInGoogle:'Nastavi s Googleom'
 },
 
 /* ---------------- БЪЛГАРСКИ ---------------- */
@@ -643,7 +699,15 @@ bg:{ label:'Български', locale:'bg-BG', cur:'€',
   copyLink:'Копирай линка', linkCopied:'Линкът е копиран', newInviteCode:'Нов код',
   regenConfirm:'Да генерирам нов линк за покана? Старият ще спре да работи.',
   reconnecting:'Възстановяване на връзката…',
-  unclosedShifts:'Незатворени смени от миналото', unclosedSince:'незатворена от'
+  unclosedShifts:'Незатворени смени от миналото', unclosedSince:'незатворена от',
+  geoGranted:'Местоположението е разрешено', geoDeniedTitle:'Местоположението е блокирано',
+  geoDeniedHelp:'Браузърът блокира достъпа до местоположение. Провери на телефона: Настройки → Приложения → Turno (или Chrome) → Разрешения → Местоположение → Разреши. Ако Turno не е в списъка, отвори turno.sk в обикновен браузър, докосни иконата на катинара до адреса, разреши там местоположението, след което затвори и отвори отново приложението на началния екран.',
+  geoEnableBtn:'Разреши местоположение',
+  remainingLbl:'Остава за изплащане', paidLbl:'Изплатено',
+  payOutBtn:'Изплати', payOutTitle:'Изплащане',
+  payOutHint:'Избери дните, които искаш да изплатиш сега. Приложението запомня точния момент, в който си направил това.',
+  payOutConfirm:'Изплати избраните', payOutNone:'Няма неизплатени дни.', payOutDone:'Изплащането е записано',
+  signInGoogle:'Продължи с Google'
 },
 
 /* ---------------- РУССКИЙ ---------------- */
@@ -723,7 +787,15 @@ ru:{ label:'Русский', locale:'ru-RU', cur:'₽',
   copyLink:'Скопировать ссылку', linkCopied:'Ссылка скопирована', newInviteCode:'Новый код',
   regenConfirm:'Создать новую ссылку-приглашение? Старая перестанет работать.',
   reconnecting:'Восстановление соединения…',
-  unclosedShifts:'Незакрытые смены из прошлого', unclosedSince:'не закрыта с'
+  unclosedShifts:'Незакрытые смены из прошлого', unclosedSince:'не закрыта с',
+  geoGranted:'Геолокация разрешена', geoDeniedTitle:'Геолокация заблокирована',
+  geoDeniedHelp:'Браузер заблокировал доступ к геолокации. Проверьте на телефоне: Настройки → Приложения → Turno (или Chrome) → Разрешения → Местоположение → Разрешить. Если Turno нет в списке, откройте turno.sk в обычной вкладке браузера, нажмите на значок замка рядом с адресом, разрешите там геолокацию, затем закройте и снова откройте приложение на главном экране.',
+  geoEnableBtn:'Разрешить геолокацию',
+  remainingLbl:'Осталось выплатить', paidLbl:'Выплачено',
+  payOutBtn:'Выплатить', payOutTitle:'Выплата',
+  payOutHint:'Выберите дни, которые хотите выплатить сейчас. Приложение запомнит точное время, когда вы это сделали.',
+  payOutConfirm:'Выплатить выбранное', payOutNone:'Нет невыплаченных дней.', payOutDone:'Выплата записана',
+  signInGoogle:'Продолжить с Google'
 }
 
 };
