@@ -78,6 +78,7 @@ sk:{ label:'Slovenčina', locale:'sk-SK', cur:'€',
   checkEmailMsg:'Poslali sme potvrdzovací odkaz na tvoj e-mail. Klikni naň a potom sa prihlás.',
   joinTitle:'Pripájaš sa k tímu', joinName:'Tvoje meno', joinBtn:'Pripojiť sa',
   joinBadCode:'Tento pozývací odkaz už neplatí. Popýtaj majiteľa o nový.',
+  joinLimitReached:'Majiteľ má už plný počet zamestnancov. Popros ho, nech si zvýši limit alebo niekoho uvoľní.',
   joinDone:'Hotovo, si pripojený/á!',
   inviteHint:'Zdieľaj tento odkaz s novým človekom – pridá sa sám, nemusíš ho zapisovať ručne.',
   copyLink:'Kopírovať odkaz', linkCopied:'Odkaz skopírovaný', newInviteCode:'Nový kód',
@@ -91,7 +92,11 @@ sk:{ label:'Slovenčina', locale:'sk-SK', cur:'€',
   payOutBtn:'Vyplatiť', payOutTitle:'Vyplatenie',
   payOutHint:'Vyber dni, ktoré chceš teraz vyplatiť. Appka si zapamätá presný čas, kedy si to zaznamenal.',
   payOutConfirm:'Vyplatiť vybrané', payOutNone:'Žiadne nevyplatené dni.', payOutDone:'Vyplatenie zaznamenané',
-  signInGoogle:'Pokračovať cez Google'
+  signInGoogle:'Pokračovať cez Google',
+  payHistoryTitle:'História výplat', payHistoryEmpty:'Zatiaľ žiadne záznamy o vyplatení.',
+  paidOnLbl:'Vyplatené', undoPayout:'Zrušiť',
+  confirmUndoPayout:'Naozaj zrušiť túto výplatu? Dni sa opäť označia ako nevyplatené.',
+  payoutUndone:'Výplata zrušená'
 },
 
 /* ---------------- ČEŠTINA ---------------- */
@@ -166,6 +171,7 @@ cs:{ label:'Čeština', locale:'cs-CZ', cur:'Kč',
   checkEmailMsg:'Poslali jsme potvrzovací odkaz na tvůj e-mail. Klikni na něj a pak se přihlas.',
   joinTitle:'Připojuješ se k týmu', joinName:'Tvoje jméno', joinBtn:'Připojit se',
   joinBadCode:'Tento zvací odkaz už neplatí. Popros majitele o nový.',
+  joinLimitReached:'Majitel má už plný počet zaměstnanců. Popros ho, ať zvýší limit nebo někoho uvolní.',
   joinDone:'Hotovo, jsi připojen/a!',
   inviteHint:'Sdílej tento odkaz s novým člověkem – přidá se sám, nemusíš ho zapisovat ručně.',
   copyLink:'Kopírovat odkaz', linkCopied:'Odkaz zkopírován', newInviteCode:'Nový kód',
@@ -179,7 +185,11 @@ cs:{ label:'Čeština', locale:'cs-CZ', cur:'Kč',
   payOutBtn:'Vyplatit', payOutTitle:'Vyplacení',
   payOutHint:'Vyber dny, které chceš teď vyplatit. Aplikace si zapamatuje přesný čas, kdy jsi to zaznamenal.',
   payOutConfirm:'Vyplatit vybrané', payOutNone:'Žádné nevyplacené dny.', payOutDone:'Vyplacení zaznamenáno',
-  signInGoogle:'Pokračovat přes Google'
+  signInGoogle:'Pokračovat přes Google',
+  payHistoryTitle:'Historie výplat', payHistoryEmpty:'Zatím žádné záznamy o vyplacení.',
+  paidOnLbl:'Vyplaceno', undoPayout:'Zrušit',
+  confirmUndoPayout:'Opravdu zrušit tuto výplatu? Dny se znovu označí jako nevyplacené.',
+  payoutUndone:'Výplata zrušena'
 },
 
 /* ---------------- POLSKI ---------------- */
@@ -254,6 +264,7 @@ pl:{ label:'Polski', locale:'pl-PL', cur:'zł',
   checkEmailMsg:'Wysłaliśmy link potwierdzający na Twój e-mail. Kliknij go, a potem się zaloguj.',
   joinTitle:'Dołączasz do zespołu', joinName:'Twoje imię', joinBtn:'Dołącz',
   joinBadCode:'Ten link zaproszenia już nie działa. Poproś właściciela o nowy.',
+  joinLimitReached:'Właściciel osiągnął limit liczby pracowników. Poproś go o zwiększenie limitu lub zwolnienie miejsca.',
   joinDone:'Gotowe, jesteś dołączony/a!',
   inviteHint:'Udostępnij ten link nowej osobie – dołączy się sama, nie musisz jej dodawać ręcznie.',
   copyLink:'Kopiuj link', linkCopied:'Link skopiowany', newInviteCode:'Nowy kod',
@@ -267,7 +278,11 @@ pl:{ label:'Polski', locale:'pl-PL', cur:'zł',
   payOutBtn:'Wypłać', payOutTitle:'Wypłata',
   payOutHint:'Wybierz dni, które chcesz teraz wypłacić. Aplikacja zapamięta dokładny czas, kiedy to zrobiłeś.',
   payOutConfirm:'Wypłać zaznaczone', payOutNone:'Brak niewypłaconych dni.', payOutDone:'Wypłata zapisana',
-  signInGoogle:'Kontynuuj z Google'
+  signInGoogle:'Kontynuuj z Google',
+  payHistoryTitle:'Historia wypłat', payHistoryEmpty:'Brak jeszcze zapisanych wypłat.',
+  paidOnLbl:'Wypłacono', undoPayout:'Cofnij',
+  confirmUndoPayout:'Na pewno cofnąć tę wypłatę? Dni zostaną ponownie oznaczone jako niewypłacone.',
+  payoutUndone:'Wypłata cofnięta'
 },
 
 /* ---------------- MAGYAR ---------------- */
@@ -342,6 +357,7 @@ hu:{ label:'Magyar', locale:'hu-HU', cur:'Ft',
   checkEmailMsg:'Küldtünk egy megerősítő linket az e-mail címedre. Kattints rá, majd jelentkezz be.',
   joinTitle:'Csatlakozol a csapathoz', joinName:'A neved', joinBtn:'Csatlakozás',
   joinBadCode:'Ez a meghívó link már nem érvényes. Kérj újat a tulajdonostól.',
+  joinLimitReached:'A tulajdonos elérte az alkalmazottak létszámhatárát. Kérd meg, hogy növelje a limitet, vagy szabadítson fel helyet.',
   joinDone:'Kész, csatlakoztál!',
   inviteHint:'Oszd meg ezt a linket az új emberrel – magától csatlakozik, nem kell kézzel hozzáadnod.',
   copyLink:'Link másolása', linkCopied:'Link másolva', newInviteCode:'Új kód',
@@ -355,7 +371,11 @@ hu:{ label:'Magyar', locale:'hu-HU', cur:'Ft',
   payOutBtn:'Kifizetés', payOutTitle:'Kifizetés',
   payOutHint:'Válaszd ki, mely napokat szeretnéd most kifizetni. Az alkalmazás megjegyzi a pontos időpontot, amikor ezt rögzítetted.',
   payOutConfirm:'Kijelöltek kifizetése', payOutNone:'Nincs kifizetetlen nap.', payOutDone:'Kifizetés rögzítve',
-  signInGoogle:'Folytatás Google-lal'
+  signInGoogle:'Folytatás Google-lal',
+  payHistoryTitle:'Kifizetési előzmények', payHistoryEmpty:'Még nincs rögzített kifizetés.',
+  paidOnLbl:'Kifizetve', undoPayout:'Visszavonás',
+  confirmUndoPayout:'Biztosan visszavonod ezt a kifizetést? A napok újra kifizetetlennek jelennek meg.',
+  payoutUndone:'Kifizetés visszavonva'
 },
 
 /* ---------------- DEUTSCH ---------------- */
@@ -430,6 +450,7 @@ de:{ label:'Deutsch', locale:'de-DE', cur:'€',
   checkEmailMsg:'Wir haben einen Bestätigungslink an deine E-Mail gesendet. Klicke ihn an und melde dich dann an.',
   joinTitle:'Du trittst dem Team bei', joinName:'Dein Name', joinBtn:'Beitreten',
   joinBadCode:'Dieser Einladungslink ist nicht mehr gültig. Frag den Inhaber nach einem neuen.',
+  joinLimitReached:'Der Inhaber hat das Limit an Mitarbeitern erreicht. Bitte ihn, das Limit zu erhöhen oder einen Platz freizugeben.',
   joinDone:'Fertig, du bist beigetreten!',
   inviteHint:'Teile diesen Link mit der neuen Person – sie tritt selbst bei, du musst sie nicht manuell hinzufügen.',
   copyLink:'Link kopieren', linkCopied:'Link kopiert', newInviteCode:'Neuer Code',
@@ -443,7 +464,11 @@ de:{ label:'Deutsch', locale:'de-DE', cur:'€',
   payOutBtn:'Auszahlen', payOutTitle:'Auszahlung',
   payOutHint:'Wähle die Tage aus, die du jetzt auszahlen möchtest. Die App merkt sich genau, wann du das gemacht hast.',
   payOutConfirm:'Auswahl auszahlen', payOutNone:'Keine offenen Tage.', payOutDone:'Auszahlung gespeichert',
-  signInGoogle:'Weiter mit Google'
+  signInGoogle:'Weiter mit Google',
+  payHistoryTitle:'Auszahlungsverlauf', payHistoryEmpty:'Noch keine Auszahlungen erfasst.',
+  paidOnLbl:'Ausgezahlt', undoPayout:'Rückgängig',
+  confirmUndoPayout:'Diese Auszahlung wirklich rückgängig machen? Die Tage gelten dann wieder als unbezahlt.',
+  payoutUndone:'Auszahlung rückgängig gemacht'
 },
 
 /* ---------------- ENGLISH ---------------- */
@@ -518,6 +543,7 @@ en:{ label:'English', locale:'en-GB', cur:'€',
   checkEmailMsg:'We sent a confirmation link to your email. Click it, then sign in.',
   joinTitle:"You're joining the team", joinName:'Your name', joinBtn:'Join',
   joinBadCode:'This invite link no longer works. Ask the owner for a new one.',
+  joinLimitReached:'The owner has reached their employee limit. Ask them to upgrade or free up a spot.',
   joinDone:"Done, you're in!",
   inviteHint:'Share this link with a new person – they join themselves, no need to add them by hand.',
   copyLink:'Copy link', linkCopied:'Link copied', newInviteCode:'New code',
@@ -531,7 +557,11 @@ en:{ label:'English', locale:'en-GB', cur:'€',
   payOutBtn:'Pay out', payOutTitle:'Pay out',
   payOutHint:'Pick the days you want to pay out now. The app records the exact time you did this.',
   payOutConfirm:'Pay out selected', payOutNone:'No unpaid days.', payOutDone:'Payment recorded',
-  signInGoogle:'Continue with Google'
+  signInGoogle:'Continue with Google',
+  payHistoryTitle:'Payout history', payHistoryEmpty:'No payouts recorded yet.',
+  paidOnLbl:'Paid', undoPayout:'Undo',
+  confirmUndoPayout:'Undo this payout? The days will be marked unpaid again.',
+  payoutUndone:'Payout undone'
 },
 
 /* ---------------- HRVATSKI ---------------- */
@@ -606,6 +636,7 @@ hr:{ label:'Hrvatski', locale:'hr-HR', cur:'€',
   checkEmailMsg:'Poslali smo potvrdni link na tvoju e-poštu. Klikni ga, pa se prijavi.',
   joinTitle:'Pridružuješ se timu', joinName:'Tvoje ime', joinBtn:'Pridruži se',
   joinBadCode:'Ovaj pozivni link više ne vrijedi. Zamoli vlasnika za novi.',
+  joinLimitReached:'Vlasnik je dosegnuo ograničenje broja zaposlenika. Zamoli ga da poveća ograničenje ili oslobodi mjesto.',
   joinDone:'Gotovo, pridružio/la si se!',
   inviteHint:'Podijeli ovaj link s novom osobom – pridružit će se sama, ne moraš je dodavati ručno.',
   copyLink:'Kopiraj link', linkCopied:'Link kopiran', newInviteCode:'Novi kod',
@@ -619,7 +650,11 @@ hr:{ label:'Hrvatski', locale:'hr-HR', cur:'€',
   payOutBtn:'Isplati', payOutTitle:'Isplata',
   payOutHint:'Odaberi dane koje sada želiš isplatiti. Aplikacija pamti točno vrijeme kada si to zabilježio.',
   payOutConfirm:'Isplati odabrano', payOutNone:'Nema neisplaćenih dana.', payOutDone:'Isplata zabilježena',
-  signInGoogle:'Nastavi s Googleom'
+  signInGoogle:'Nastavi s Googleom',
+  payHistoryTitle:'Povijest isplata', payHistoryEmpty:'Još nema zabilježenih isplata.',
+  paidOnLbl:'Isplaćeno', undoPayout:'Poništi',
+  confirmUndoPayout:'Stvarno poništiti ovu isplatu? Dani će se ponovno označiti kao neisplaćeni.',
+  payoutUndone:'Isplata poništena'
 },
 
 /* ---------------- БЪЛГАРСКИ ---------------- */
@@ -694,6 +729,7 @@ bg:{ label:'Български', locale:'bg-BG', cur:'€',
   checkEmailMsg:'Изпратихме потвърждаващ линк на имейла ти. Кликни го и после влез.',
   joinTitle:'Присъединяваш се към екипа', joinName:'Твоето име', joinBtn:'Присъедини се',
   joinBadCode:'Тази покана вече не важи. Помоли собственика за нова.',
+  joinLimitReached:'Собственикът е достигнал лимита на служителите. Помоли го да увеличи лимита или да освободи място.',
   joinDone:'Готово, присъедини се!',
   inviteHint:'Сподели този линк с новия човек – ще се присъедини сам, не е нужно да го добавяш ръчно.',
   copyLink:'Копирай линка', linkCopied:'Линкът е копиран', newInviteCode:'Нов код',
@@ -707,7 +743,11 @@ bg:{ label:'Български', locale:'bg-BG', cur:'€',
   payOutBtn:'Изплати', payOutTitle:'Изплащане',
   payOutHint:'Избери дните, които искаш да изплатиш сега. Приложението запомня точния момент, в който си направил това.',
   payOutConfirm:'Изплати избраните', payOutNone:'Няма неизплатени дни.', payOutDone:'Изплащането е записано',
-  signInGoogle:'Продължи с Google'
+  signInGoogle:'Продължи с Google',
+  payHistoryTitle:'История на плащанията', payHistoryEmpty:'Все още няма записани плащания.',
+  paidOnLbl:'Изплатено', undoPayout:'Отмени',
+  confirmUndoPayout:'Наистина ли да се отмени това плащане? Дните отново ще бъдат маркирани като неизплатени.',
+  payoutUndone:'Плащането е отменено'
 },
 
 /* ---------------- РУССКИЙ ---------------- */
@@ -782,6 +822,7 @@ ru:{ label:'Русский', locale:'ru-RU', cur:'₽',
   checkEmailMsg:'Мы отправили ссылку для подтверждения на вашу почту. Перейдите по ней, затем войдите.',
   joinTitle:'Вы присоединяетесь к команде', joinName:'Ваше имя', joinBtn:'Присоединиться',
   joinBadCode:'Эта ссылка-приглашение больше не действует. Попросите у владельца новую.',
+  joinLimitReached:'Владелец достиг лимита сотрудников. Попросите его увеличить лимит или освободить место.',
   joinDone:'Готово, вы присоединились!',
   inviteHint:'Поделитесь этой ссылкой с новым человеком — он присоединится сам, добавлять вручную не нужно.',
   copyLink:'Скопировать ссылку', linkCopied:'Ссылка скопирована', newInviteCode:'Новый код',
@@ -795,7 +836,11 @@ ru:{ label:'Русский', locale:'ru-RU', cur:'₽',
   payOutBtn:'Выплатить', payOutTitle:'Выплата',
   payOutHint:'Выберите дни, которые хотите выплатить сейчас. Приложение запомнит точное время, когда вы это сделали.',
   payOutConfirm:'Выплатить выбранное', payOutNone:'Нет невыплаченных дней.', payOutDone:'Выплата записана',
-  signInGoogle:'Продолжить с Google'
+  signInGoogle:'Продолжить с Google',
+  payHistoryTitle:'История выплат', payHistoryEmpty:'Пока нет записанных выплат.',
+  paidOnLbl:'Выплачено', undoPayout:'Отменить',
+  confirmUndoPayout:'Действительно отменить эту выплату? Дни снова станут невыплаченными.',
+  payoutUndone:'Выплата отменена'
 }
 
 };
