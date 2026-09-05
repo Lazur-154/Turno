@@ -1040,6 +1040,49 @@ function toast(msg){
   document.body.appendChild(el);setTimeout(()=>el.remove(),1900);
 }
 
+/* Demo-rezim: rovnaka logika ako databazove funkcie emp_punch_station a
+   emp_punch_station_face — spolocna pre oba sposoby, ako sa zamestnanec
+   pri stanici zapise (osobny QR kod, alebo teraz aj tvar). */
+function demoStationPunch(me){
+  const CUTOFF_MS=90*60000;
+  const open=MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival&&!x.departure);
+  const nowIso=new Date().toISOString(), nowMs=Date.now();
+  const fillPlanned=()=>MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&!x.arrival);
+  if(!open){
+    const planned=fillPlanned();
+    let sh;
+    if(planned){ planned.arrival=nowIso; sh=planned; }
+    else{
+      sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+          plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+      MEM.shifts.push(sh);
+    }
+    return {action:'in', name:me.name, shift:sh};
+  }
+  const list=Array.isArray(open.breaks)?open.breaks.slice():[];
+  const last=list.length?list[list.length-1]:null;
+  const openBrk=last&&!last.e;
+  if(!openBrk){
+    list.push({s:nowIso,e:null}); open.breaks=list;
+    return {action:'break', name:me.name, shift:open};
+  }
+  const lastS=new Date(last.s).getTime();
+  if(nowMs-lastS<=CUTOFF_MS){
+    list[list.length-1]={...last,e:nowIso}; open.breaks=list;
+    return {action:'back', name:me.name, shift:open};
+  }
+  open.departure=new Date(lastS+CUTOFF_MS).toISOString();
+  const planned2=fillPlanned();
+  let sh2;
+  if(planned2){ planned2.arrival=nowIso; sh2=planned2; }
+  else{
+    sh2={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+         plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+    MEM.shifts.push(sh2);
+  }
+  return {action:'in', name:me.name, shift:sh2};
+}
+
 /* ============================================================
    DATA LAYER — Supabase, alebo demo v pamäti
    ============================================================ */
@@ -1333,50 +1376,50 @@ const DB = {
     if(!LIVE){
       const me=MEM.employees.find(e=>String(e.access_code)===code);
       if(!me) throw new Error('zly_kod');
-      const CUTOFF_MS=90*60000;
-      const open=MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival&&!x.departure);
-      const nowIso=new Date().toISOString(), nowMs=Date.now();
-      /* Ak uz ma na dnes naplanovanu (este nezacatu) zmenu, vyplnime prichod
-         do NEJ — inak by vedla zdvojena karta (planovana + nova) pre toho
-         isteho cloveka na Dnes, presne to co sa stalo pri prvom teste. */
-      const fillPlanned=()=>MEM.shifts.find(x=>x.employee_id===me.id&&x.date===todayISO()&&!x.arrival);
-      if(!open){
-        const planned=fillPlanned();
-        let sh;
-        if(planned){ planned.arrival=nowIso; sh=planned; }
-        else{
-          sh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
-              plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
-          MEM.shifts.push(sh);
-        }
-        return {action:'in', name:me.name, shift:sh};
-      }
-      const list=Array.isArray(open.breaks)?open.breaks.slice():[];
-      const last=list.length?list[list.length-1]:null;
-      const openBrk=last&&!last.e;
-      if(!openBrk){
-        // pracuje => odchod/prestavka
-        list.push({s:nowIso,e:null}); open.breaks=list;
-        return {action:'break', name:me.name, shift:open};
-      }
-      const lastS=new Date(last.s).getTime();
-      if(nowMs-lastS<=CUTOFF_MS){
-        list[list.length-1]={...last,e:nowIso}; open.breaks=list;
-        return {action:'back', name:me.name, shift:open};
-      }
-      // prekrocil limit => stara zmena sa uzavrela, zacina nova
-      open.departure=new Date(lastS+CUTOFF_MS).toISOString();
-      const planned2=fillPlanned();
-      let sh2;
-      if(planned2){ planned2.arrival=nowIso; sh2=planned2; }
-      else{
-        sh2={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
-             plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
-        MEM.shifts.push(sh2);
-      }
-      return {action:'in', name:me.name, shift:sh2};
+      return demoStationPunch(me);
     }
     const data = await sbop(()=>sb.rpc('emp_punch_station',{p_code:code, p_station:stationToken}));
+    return data||null;
+  },
+
+  /* --- rozpoznavanie tvare pri stanici (experimentalna funkcia) ---
+     Ukladanie/mazanie popisu tvare ide cez bezny authenticated update
+     (RLS uz vlastnikovi zapis do vlastnych zamestnancov povoluje), takze
+     tu netreba ziadnu novu RPC funkciu — tie su potrebne len tam, kde
+     pristupuje anonymna stanica alebo zamestnanec bez prihlasenia. */
+  async saveEmployeeFace(id, descriptors){
+    if(!LIVE){
+      const r=MEM.employees.find(e=>e.id===id);
+      if(r){ r.face_descriptors=descriptors; r.face_consent_at=new Date().toISOString(); }
+      return;
+    }
+    await sbop(()=>sb.from('employees').update({face_descriptors:descriptors, face_consent_at:new Date().toISOString()}).eq('id',id));
+  },
+  async clearEmployeeFace(id){
+    if(!LIVE){
+      const r=MEM.employees.find(e=>e.id===id);
+      if(r){ r.face_descriptors=null; r.face_consent_at=null; }
+      return;
+    }
+    await sbop(()=>sb.from('employees').update({face_descriptors:null, face_consent_at:null}).eq('id',id));
+  },
+  /* Stanica (anonymna, len s tokenom v URL) si dotiahne zoznam tvari
+     vsetkych zamestnancov toho isteho vlastnika cez SECURITY DEFINER RPC. */
+  async stationFaceData(stationToken){
+    if(!LIVE){
+      return MEM.employees.filter(e=>e.face_descriptors&&e.face_descriptors.length)
+        .map(e=>({id:e.id, name:e.name, face_descriptors:e.face_descriptors}));
+    }
+    const data = await sbop(()=>sb.rpc('station_face_data',{p_station:stationToken}));
+    return data||[];
+  },
+  async punchStationFace(employeeId, stationToken){
+    if(!LIVE){
+      const me=MEM.employees.find(e=>e.id===employeeId);
+      if(!me) throw new Error('zly_kod');
+      return demoStationPunch(me);
+    }
+    const data = await sbop(()=>sb.rpc('emp_punch_station_face',{p_employee_id:employeeId, p_station:stationToken}));
     return data||null;
   },
 
@@ -2421,7 +2464,7 @@ function viewPeople(){
       return `
       <div class="person">
         <div>
-          <div class="pname">${esc(e.name)}</div>
+          <div class="pname">${esc(e.name)}${e.face_descriptors&&e.face_descriptors.length?` <span style="color:var(--verdigris);font-size:12px;font-weight:600">${t('faceEnrolledBadge')}</span>`:''}</div>
           <div class="pcode">${t('codeLbl')}: <b>${esc(e.access_code||'\u2014')}</b></div>
           <div class="pcode">${loginInfo(e)}</div>
           <div class="position-row">
@@ -2438,6 +2481,8 @@ function viewPeople(){
           <span>${cur()}/${t('hUnit')}</span>
         </div>
         <button class="btn ghost" data-act="pay-open" data-id="${e.id}">\ud83d\udcb6 ${t('payOutBtn')}</button>
+        <button class="btn ghost" data-act="face-open" data-id="${e.id}">\ud83d\udcf7 ${e.face_descriptors&&e.face_descriptors.length?t('faceChangeBtn'):t('faceSetBtn')}</button>
+        ${e.face_descriptors&&e.face_descriptors.length?`<button class="btn ghost" data-act="face-clear" data-id="${e.id}">${t('faceClearBtn')}</button>`:''}
         <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
       </div>`;}).join(''):`<div class="empty"><p>${t('noPeople')}</p>
         <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
@@ -2805,7 +2850,28 @@ function loadScriptOnce(src){
     document.head.appendChild(sc);
   });
 }
-let stationBusy=false, stationLastTick=0;
+/* Rozpoznavanie tvare (experimentalna funkcia) — kniznica sa dotiahne az
+   ked ju niekto naozaj potrebuje (nastavovanie tvare zamestnanca, alebo
+   stanica, ktora ma aspon jedneho zamestnanca s ulozenou tvarou), nech
+   to nezatazuje appku vsetkym ostatnym. */
+const FACE_CDN = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/dist/face-api.js';
+const FACE_MODEL_URL = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.15/model';
+const FACE_SAMPLES = 3;
+const FACE_MATCH_THRESHOLD = 0.55;
+let faceModelsLoaded=false;
+async function ensureFaceApi(){
+  if(!window.faceapi) await loadScriptOnce(FACE_CDN);
+  if(!window.faceapi) throw new Error('faceapi_load_failed');
+  if(!faceModelsLoaded){
+    await Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri(FACE_MODEL_URL),
+      faceapi.nets.faceLandmark68TinyNet.loadFromUri(FACE_MODEL_URL),
+      faceapi.nets.faceRecognitionNet.loadFromUri(FACE_MODEL_URL),
+    ]);
+    faceModelsLoaded=true;
+  }
+}
+let stationBusy=false, stationLastTick=0, stationFaces=[], stationFaceReady=false;
 async function startStation(){
   const video=document.getElementById('station-video');
   if(!video) return;
@@ -2852,6 +2918,44 @@ async function startStation(){
     requestAnimationFrame(tick);
   }
   requestAnimationFrame(tick);
+
+  /* Rozpoznavanie tvare beží popri QR skeneri, nezavisle od neho — ak sa
+     nenacita (napr. ziadny internet na CDN) alebo vlastnik ziadne tvare
+     nenastavil, QR skenovanie funguje dalej bez zmeny. */
+  (async()=>{
+    try{
+      const rows = await DB.stationFaceData(S.stationToken);
+      if(!rows || !rows.length) return;
+      await ensureFaceApi();
+      stationFaces = rows.map(r=>({id:r.id, name:r.name,
+        descriptors:(r.face_descriptors||[]).map(d=>new Float32Array(d))}));
+      stationFaceReady = true;
+      if(!stationBusy) stationSetMsg(t('stationReadyFace'), null);
+    }catch(e){ /* ticho zlyha — stanica funguje dalej len s QR kodom */ }
+  })();
+
+  let faceLastTick=0;
+  async function faceTick(now){
+    if(stationFaceReady && !stationBusy && video.readyState>=2 && (now-faceLastTick)>700){
+      faceLastTick=now;
+      try{
+        const det = await faceapi.detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks(true).withFaceDescriptor();
+        if(det){
+          let best=null, bestDist=Infinity;
+          for(const person of stationFaces){
+            for(const d of person.descriptors){
+              const dist=faceapi.euclideanDistance(det.descriptor, d);
+              if(dist<bestDist){ bestDist=dist; best=person; }
+            }
+          }
+          if(best && bestDist<FACE_MATCH_THRESHOLD) handleStationFace(best.id, best.name);
+        }
+      }catch(e){}
+    }
+    requestAnimationFrame(faceTick);
+  }
+  requestAnimationFrame(faceTick);
 }
 async function handleStationCode(raw){
   const m=/^TURNO-EMP:(.+)$/.exec(String(raw||'').trim());
@@ -2867,7 +2971,21 @@ async function handleStationCode(raw){
     const msg=String((e&&e.message)||'');
     stationSetMsg(msg.indexOf('zla_stanica')>=0 ? t('stationBadStation') : t('stationBadCode'), 'err');
   }
-  setTimeout(()=>{ stationBusy=false; stationSetMsg(t('stationReady'), null); }, 3500);
+  setTimeout(()=>{ stationBusy=false; stationSetMsg(stationFaceReady?t('stationReadyFace'):t('stationReady'), null); }, 3500);
+}
+async function handleStationFace(employeeId, name){
+  stationBusy=true;
+  stationSetMsg('…', null);
+  try{
+    const r=await DB.punchStationFace(employeeId, S.stationToken);
+    if(!r) throw new Error('zly_kod');
+    const label = r.action==='in' ? t('arrive') : r.action==='break' ? t('breakStart') : t('breakEnd');
+    stationSetMsg((((r&&r.name)||name)?((r&&r.name)||name)+' — ':'')+label+' ✓', 'ok');
+  }catch(e){
+    const msg=String((e&&e.message)||'');
+    stationSetMsg(msg.indexOf('zla_stanica')>=0 ? t('stationBadStation') : t('stationBadCode'), 'err');
+  }
+  setTimeout(()=>{ stationBusy=false; stationSetMsg(stationFaceReady?t('stationReadyFace'):t('stationReady'), null); }, 3500);
 }
 
 function supportPanel(){
@@ -3249,8 +3367,64 @@ function openPersonModal(){
 function closeModal(){
   S.subModal=false;
   if(window.__geoMapState){ try{ __geoMapState.map.remove(); }catch(e){} window.__geoMapState=null; }
+  if(window.__faceState){
+    try{ (window.__faceState.stream&&window.__faceState.stream.getTracks()||[]).forEach(tr=>tr.stop()); }catch(e){}
+    window.__faceState=null;
+  }
   modalHost.innerHTML='';
   document.body.classList.remove('locked');
+}
+/* ---------- Nastavenie tvare zamestnanca (experimentalna funkcia) ---------- */
+function faceModalBody(id){
+  const emp=S.employees.find(x=>x.id===id);
+  const already=!!(emp&&emp.face_descriptors&&emp.face_descriptors.length);
+  return `<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('faceModalTitle')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <div class="fg">
+      <p class="help" style="margin:0 0 10px">${t('faceCaptureHint').replace('{m}',FACE_SAMPLES)}</p>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;margin-bottom:12px">
+        <input type="checkbox" id="face-consent" style="margin-top:3px"${already?' checked':''}>
+        <span>${t('faceConsentText')}</span>
+      </label>
+      <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;max-width:360px;margin:0 auto 10px">
+        <video id="face-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+      </div>
+      <div id="face-status" class="help" style="text-align:center;margin:0 0 10px">${t('faceCaptureProgress').replace('{n}','0').replace('{m}',FACE_SAMPLES)}</div>
+    </div>
+    <div class="sheet-act">
+      <button class="btn ghost" data-act="close">${t('cancel')}</button>
+      <button class="btn ghost" data-act="face-capture" id="face-capture-btn">${t('faceCaptureBtn')}</button>
+      <button class="btn" data-act="face-save" id="face-save-btn" disabled>${t('save')}</button>
+    </div>
+  </div></div>`;
+}
+async function openFaceModal(id){
+  window.__faceState = {id, descriptors:[], stream:null};
+  openModal(faceModalBody(id));
+  const statusEl=document.getElementById('face-status');
+  if(statusEl) statusEl.textContent=t('faceModelsLoading');
+  try{
+    await ensureFaceApi();
+  }catch(e){
+    if(document.getElementById('face-status')) document.getElementById('face-status').textContent=t('faceModelsErr');
+    return;
+  }
+  const video=document.getElementById('face-video');
+  if(!video || !window.__faceState) return; // medzitym zatvorene
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({video:true, audio:false});
+    if(!window.__faceState){ stream.getTracks().forEach(tr=>tr.stop()); return; } // medzitym zatvorene
+    window.__faceState.stream=stream;
+    video.srcObject=stream;
+    try{ await video.play(); }catch(e){}
+  }catch(e){
+    const el=document.getElementById('face-status');
+    if(el) el.textContent = (e&&e.name==='NotFoundError')?t('stationCamMissing'):t('stationCamDenied');
+    return;
+  }
+  const el=document.getElementById('face-status');
+  if(el) el.textContent=t('faceCaptureProgress').replace('{n}','0').replace('{m}',FACE_SAMPLES);
 }
 function openModal(html){
   modalHost.innerHTML=html;
@@ -3866,6 +4040,53 @@ document.addEventListener('click',async ev=>{
         S.shifts=S.shifts.filter(x=>x.employee_id!==id);
         toast(t('removed')); render();
       }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'face-open': openFaceModal(el.dataset.id); break;
+    case 'face-clear': {
+      if(!confirm(t('confirmClearFace')))return;
+      const id=el.dataset.id;
+      try{
+        await DB.clearEmployeeFace(id);
+        const r=S.employees.find(x=>x.id===id); if(r){ r.face_descriptors=null; r.face_consent_at=null; }
+        toast(t('faceClearedToast')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'face-capture': {
+      const st=window.__faceState; if(!st) return;
+      const video=document.getElementById('face-video');
+      const statusEl=document.getElementById('face-status');
+      const consentEl=document.getElementById('face-consent');
+      if(!consentEl||!consentEl.checked){ toast(t('faceConsentRequired')); break; }
+      if(!video||!window.faceapi) break;
+      el.disabled=true;
+      try{
+        const dets = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks(true).withFaceDescriptors();
+        if(!window.__faceState) break; // medzitym zatvorene
+        if(!dets || dets.length===0){ if(statusEl) statusEl.textContent=t('faceNoFaceDetected'); el.disabled=false; break; }
+        if(dets.length>1){ if(statusEl) statusEl.textContent=t('faceMultipleFaces'); el.disabled=false; break; }
+        st.descriptors.push(Array.from(dets[0].descriptor));
+        if(statusEl) statusEl.textContent=t('faceCaptureProgress').replace('{n}',st.descriptors.length).replace('{m}',FACE_SAMPLES);
+        const saveBtn=document.getElementById('face-save-btn');
+        if(st.descriptors.length>=FACE_SAMPLES){
+          if(saveBtn) saveBtn.disabled=false;
+        } else {
+          el.disabled=false;
+        }
+      }catch(e){ if(statusEl) statusEl.textContent=t('faceModelsErr'); el.disabled=false; }
+      break;
+    }
+    case 'face-save': {
+      const st=window.__faceState; if(!st||!st.descriptors.length) break;
+      el.disabled=true;
+      try{
+        await DB.saveEmployeeFace(st.id, st.descriptors);
+        const r=S.employees.find(x=>x.id===st.id);
+        if(r){ r.face_descriptors=st.descriptors; r.face_consent_at=new Date().toISOString(); }
+        closeModal(); toast(t('faceSaveDone')); render();
+      }catch(err){ el.disabled=false; dbErr(err); }
       break;
     }
     case 'pay-open': openModal(payModalBody(el.dataset.id)); break;
