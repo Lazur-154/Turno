@@ -824,6 +824,20 @@ async function refreshGeoPermState(){
   }catch(e){ S.geoPermState='unknown'; }
   render();
 }
+/* Ked ma firma zapnuty rezim "kazdy sam" s overovanim polohy, no zamestnanec
+   sa este nerozhodol (ani nepovolil, ani nezakazal), poziadame o polohu
+   rovno po prihlaseni — nech na to nemusi hladat tlacidlo. Na Androide sa
+   nainstalovana appka v Nastaveniach telefonu s opravnenim na polohu objavi,
+   az ked si appka o polohu aspon raz sama poziada — kym sa to nestane,
+   clovek ju tam proste nema ako povolit. */
+async function ensureGeoPermission(){
+  if(S.role!=='employee' || !S.geoOn || S.punchMode!=='self') return;
+  await refreshGeoPermState();
+  if(S.geoPermState==='granted' || S.geoPermState==='denied') return;
+  toast(t('geoLocating'));
+  await getPos();
+  await refreshGeoPermState();
+}
 /* Predplatne: ak je platne_do v minulosti, appka sa zamkne.
    Prazdna hodnota = bez obmedzenia (demo, stare ucty). */
 function isLocked(dateStr){
@@ -1190,8 +1204,16 @@ const DB = {
   async employeeByCode(code){
     if(!LIVE){
       const e=MEM.employees.find(x=>String(x.access_code)===code);
-      if(e) e.last_login=new Date().toISOString();
-      return e||null;
+      if(!e) return null;
+      e.last_login=new Date().toISOString();
+      /* v ostrej appke tieto polia dotiahne emp_me() cez join na settings —
+         v demo rezime to spravime rucne, nech sa demo sprava rovnako */
+      S.punchMode = MEM.settings.punch_mode || 'owner';
+      return {...e, punch_mode:S.punchMode, platne_do:null,
+        geo_on: !!MEM.settings.geo_on, geo_radius: MEM.settings.geo_radius||100,
+        geo_lat: MEM.settings.geo_lat===undefined?null:MEM.settings.geo_lat,
+        geo_lon: MEM.settings.geo_lon===undefined?null:MEM.settings.geo_lon,
+        geo_mode: MEM.settings.geo_mode||'circle', geo_polygon: MEM.settings.geo_polygon||null};
     }
     const data = await sbop(()=>sb.rpc('emp_me',{p_code:code}));
     const row=(data&&data[0])||null;
@@ -3504,11 +3526,13 @@ document.addEventListener('click',async ev=>{
         S.employees=[me]; S.me=me; S.myCode=res.access_code; S.platneDo=me.platne_do||null;
         S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
         S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
+        S.geoMode=me.geo_mode==='polygon'?'polygon':'circle';
+        S.geoPolygon=Array.isArray(me.geo_polygon)?me.geo_polygon:null;
         S.role='employee'; S.loginErr='';
         try{ localStorage.setItem(EMP_CODE_KEY, res.access_code); }catch(e){}
         clearJoinFromUrl();
         render();
-        if(S.geoOn) refreshGeoPermState();
+        ensureGeoPermission();
       }catch(err){
         const msg=(err&&err.message)||'';
         S.loginErr = /limit_reached/i.test(msg) ? t('joinLimitReached') : t('joinBadCode');
@@ -3688,9 +3712,11 @@ document.addEventListener('click',async ev=>{
       S.employees=[me]; S.me=me; S.myCode=code; S.platneDo=me.platne_do||null;
       S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
       S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
+      S.geoMode=me.geo_mode==='polygon'?'polygon':'circle';
+      S.geoPolygon=Array.isArray(me.geo_polygon)?me.geo_polygon:null;
       S.role='employee'; S.loginErr='';
       try{ localStorage.setItem(EMP_CODE_KEY, code); }catch(e){}
-      render(); if(S.geoOn) refreshGeoPermState(); break;
+      render(); ensureGeoPermission(); break;
     }
     case 'signout':
       await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; S.landing=true; S.loginTab='owner';
@@ -4013,6 +4039,8 @@ setInterval(()=>{
             S.employees=[me]; S.me=me; S.myCode=savedCode; S.platneDo=me.platne_do||null;
             S.geoOn=!!me.geo_on; S.geoRadius=me.geo_radius||100;
             S.geoLat=me.geo_lat===null?null:Number(me.geo_lat); S.geoLon=me.geo_lon===null?null:Number(me.geo_lon);
+            S.geoMode=me.geo_mode==='polygon'?'polygon':'circle';
+            S.geoPolygon=Array.isArray(me.geo_polygon)?me.geo_polygon:null;
             S.role='employee';
           }else{
             /* kod uz neplati (napr. zamestnanca vlastnik zmazal) */
@@ -4027,7 +4055,7 @@ setInterval(()=>{
     }
   }
   render();
-  if(S.role==='employee' && S.geoOn) refreshGeoPermState();
+  if(S.role==='employee') ensureGeoPermission();
   /* Navrat zo Stripe Checkoutu/portálu — webhook, ktory realne aktualizuje
      people_limit v Supabase, moze dobehnut o pár sekúnd neskor ako presmerovanie
      spat do appky, tak to na zaciatku par-krat skusime dotiahnut. */
