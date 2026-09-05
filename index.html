@@ -3374,7 +3374,11 @@ function closeModal(){
   modalHost.innerHTML='';
   document.body.classList.remove('locked');
 }
-/* ---------- Nastavenie tvare zamestnanca (experimentalna funkcia) ---------- */
+/* ---------- Nastavenie tvare zamestnanca (experimentalna funkcia) ----------
+   Ziadne tlacidlo "odfotit" — funguje ako nastavenie Face ID v mobile:
+   clovek sa len pozera do kruhoveho zaberu a mierne pohne hlavou, appka ho
+   sama priebezne skenuje na pozadi a po {FACE_SAMPLES} dobrych zabery sama
+   ulozi a okno zavrie. */
 function faceModalBody(id){
   const emp=S.employees.find(x=>x.id===id);
   const already=!!(emp&&emp.face_descriptors&&emp.face_descriptors.length);
@@ -3382,25 +3386,25 @@ function faceModalBody(id){
     <div class="sheet-head"><h3>${t('faceModalTitle')}</h3>
       <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
     <div class="fg">
-      <p class="help" style="margin:0 0 10px">${t('faceCaptureHint').replace('{m}',FACE_SAMPLES)}</p>
-      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;margin-bottom:12px">
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px;line-height:1.4;margin-bottom:14px">
         <input type="checkbox" id="face-consent" style="margin-top:3px"${already?' checked':''}>
         <span>${t('faceConsentText')}</span>
       </label>
-      <div style="position:relative;border-radius:14px;overflow:hidden;background:#000;aspect-ratio:4/3;max-width:360px;margin:0 auto 10px">
-        <video id="face-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover"></video>
+      <div id="face-ring" style="width:220px;height:220px;border-radius:50%;margin:0 auto 14px;padding:6px;box-sizing:border-box;
+        background:conic-gradient(var(--verdigris) 0%, rgba(236,234,225,.18) 0%);transition:background .3s">
+        <div style="width:100%;height:100%;border-radius:50%;overflow:hidden;background:#000">
+          <video id="face-video" autoplay playsinline muted style="width:100%;height:100%;object-fit:cover;transform:scaleX(-1)"></video>
+        </div>
       </div>
-      <div id="face-status" class="help" style="text-align:center;margin:0 0 10px">${t('faceCaptureProgress').replace('{n}','0').replace('{m}',FACE_SAMPLES)}</div>
+      <div id="face-status" class="help" style="text-align:center;margin:0 0 6px">${t('faceModelsLoading')}</div>
     </div>
     <div class="sheet-act">
       <button class="btn ghost" data-act="close">${t('cancel')}</button>
-      <button class="btn ghost" data-act="face-capture" id="face-capture-btn">${t('faceCaptureBtn')}</button>
-      <button class="btn" data-act="face-save" id="face-save-btn" disabled>${t('save')}</button>
     </div>
   </div></div>`;
 }
 async function openFaceModal(id){
-  window.__faceState = {id, descriptors:[], stream:null};
+  window.__faceState = {id, descriptors:[], stream:null, done:false, lastCaptureAt:0, lastCheckAt:0};
   openModal(faceModalBody(id));
   const statusEl=document.getElementById('face-status');
   if(statusEl) statusEl.textContent=t('faceModelsLoading');
@@ -3424,7 +3428,59 @@ async function openFaceModal(id){
     return;
   }
   const el=document.getElementById('face-status');
-  if(el) el.textContent=t('faceCaptureProgress').replace('{n}','0').replace('{m}',FACE_SAMPLES);
+  if(el) el.textContent=t('faceCaptureHint').replace('{m}',FACE_SAMPLES);
+  requestAnimationFrame(faceEnrollTick);
+}
+/* Bezi na pozadi, kym je okno otvorene: priebezne skusa najst presne jednu
+   tvar a z casu na cas (aby vzorky neboli 3x ta ista snimka) si z nej
+   spravi odtlacok. Po dosiahnuti FACE_SAMPLES sam ulozi a zavrie okno. */
+async function faceEnrollTick(){
+  const st=window.__faceState;
+  if(!st || st.done) return; // okno zatvorene alebo uz hotovo — slucka konci
+  const video=document.getElementById('face-video');
+  const statusEl=document.getElementById('face-status');
+  const consentEl=document.getElementById('face-consent');
+  if(!video||!consentEl){ requestAnimationFrame(faceEnrollTick); return; }
+  if(!consentEl.checked){
+    if(statusEl) statusEl.textContent=t('faceConsentRequired');
+    requestAnimationFrame(faceEnrollTick);
+    return;
+  }
+  const now = (window.performance&&performance.now) ? performance.now() : Date.now();
+  if(video.readyState>=2 && window.faceapi && (now-st.lastCheckAt)>350){
+    st.lastCheckAt=now;
+    try{
+      const dets = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+        .withFaceLandmarks(true).withFaceDescriptors();
+      const cur=window.__faceState;
+      if(!cur || cur.done) return; // medzitym zatvorene/hotovo
+      if(!dets || dets.length===0){ if(statusEl) statusEl.textContent=t('faceNoFaceDetected'); }
+      else if(dets.length>1){ if(statusEl) statusEl.textContent=t('faceMultipleFaces'); }
+      else if((now-cur.lastCaptureAt)>700){
+        cur.lastCaptureAt=now;
+        cur.descriptors.push(Array.from(dets[0].descriptor));
+        if(statusEl) statusEl.textContent=t('faceCaptureProgress').replace('{n}',cur.descriptors.length).replace('{m}',FACE_SAMPLES);
+        const ringEl=document.getElementById('face-ring');
+        if(ringEl) ringEl.style.background='conic-gradient(var(--verdigris) '+Math.round(cur.descriptors.length/FACE_SAMPLES*100)+'%, rgba(236,234,225,.18) 0%)';
+        if(cur.descriptors.length>=FACE_SAMPLES){
+          cur.done=true;
+          finishFaceEnrollment(cur);
+          return; // slucka konci, okno sa o chvilu samo zavrie
+        }
+      }
+    }catch(e){ /* jeden pokus sa nepodaril — skusi znova o chvilu */ }
+  }
+  requestAnimationFrame(faceEnrollTick);
+}
+async function finishFaceEnrollment(st){
+  const statusEl=document.getElementById('face-status');
+  if(statusEl) statusEl.textContent=t('faceSaveDone');
+  try{
+    await DB.saveEmployeeFace(st.id, st.descriptors);
+    const r=S.employees.find(x=>x.id===st.id);
+    if(r){ r.face_descriptors=st.descriptors; r.face_consent_at=new Date().toISOString(); }
+  }catch(err){ dbErr(err); }
+  setTimeout(()=>{ closeModal(); toast(t('faceSaveDone')); render(); }, 700);
 }
 function openModal(html){
   modalHost.innerHTML=html;
@@ -4051,42 +4107,6 @@ document.addEventListener('click',async ev=>{
         const r=S.employees.find(x=>x.id===id); if(r){ r.face_descriptors=null; r.face_consent_at=null; }
         toast(t('faceClearedToast')); render();
       }catch(err){ dbErr(err); }
-      break;
-    }
-    case 'face-capture': {
-      const st=window.__faceState; if(!st) return;
-      const video=document.getElementById('face-video');
-      const statusEl=document.getElementById('face-status');
-      const consentEl=document.getElementById('face-consent');
-      if(!consentEl||!consentEl.checked){ toast(t('faceConsentRequired')); break; }
-      if(!video||!window.faceapi) break;
-      el.disabled=true;
-      try{
-        const dets = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
-          .withFaceLandmarks(true).withFaceDescriptors();
-        if(!window.__faceState) break; // medzitym zatvorene
-        if(!dets || dets.length===0){ if(statusEl) statusEl.textContent=t('faceNoFaceDetected'); el.disabled=false; break; }
-        if(dets.length>1){ if(statusEl) statusEl.textContent=t('faceMultipleFaces'); el.disabled=false; break; }
-        st.descriptors.push(Array.from(dets[0].descriptor));
-        if(statusEl) statusEl.textContent=t('faceCaptureProgress').replace('{n}',st.descriptors.length).replace('{m}',FACE_SAMPLES);
-        const saveBtn=document.getElementById('face-save-btn');
-        if(st.descriptors.length>=FACE_SAMPLES){
-          if(saveBtn) saveBtn.disabled=false;
-        } else {
-          el.disabled=false;
-        }
-      }catch(e){ if(statusEl) statusEl.textContent=t('faceModelsErr'); el.disabled=false; }
-      break;
-    }
-    case 'face-save': {
-      const st=window.__faceState; if(!st||!st.descriptors.length) break;
-      el.disabled=true;
-      try{
-        await DB.saveEmployeeFace(st.id, st.descriptors);
-        const r=S.employees.find(x=>x.id===st.id);
-        if(r){ r.face_descriptors=st.descriptors; r.face_consent_at=new Date().toISOString(); }
-        closeModal(); toast(t('faceSaveDone')); render();
-      }catch(err){ el.disabled=false; dbErr(err); }
       break;
     }
     case 'pay-open': openModal(payModalBody(el.dataset.id)); break;
