@@ -699,6 +699,7 @@ const S = {
   joinCode:null,
   inviteCode:null,
   employees:[],
+  archivedEmployees:[],   // ludia oznaceni ako odstraneni — ich zmeny/vyplaty ostavaju v historii
   shifts:[],
   notes:[],
   payments:[],          // zaznamy o vyplateni (kto, ktore dni, kolko, kedy)
@@ -996,7 +997,9 @@ function durLong(h){
   if(hh)      return hh+' '+t('hUnit');
   return mm+' '+t('minUnit');
 }
-function empById(id){return S.employees.find(e=>e.id===id)}
+/* Hlada aj medzi archivovanymi — meno/sadzbu treba vediet dohladat aj pre
+   stare zmeny/vyplaty odstraneneho cloveka, nech v historii nezostane "?". */
+function empById(id){return S.employees.find(e=>e.id===id) || (S.archivedEmployees||[]).find(e=>e.id===id)}
 function initials(name){
   return (name||'').trim().split(/\s+/).slice(0,2).map(w=>w[0]||'').join('').toUpperCase();
 }
@@ -1006,7 +1009,7 @@ function shiftsOn(date){
     .sort((a,b)=>(a.plan_start||'').localeCompare(b.plan_start||''));
 }
 function makeCode(){
-  const used=new Set(S.employees.map(e=>String(e.access_code)));
+  const used=new Set(S.employees.concat(S.archivedEmployees||[]).map(e=>String(e.access_code)));
   for(let i=0;i<200;i++){
     const c=String(Math.floor(Math.random()*1000000)).padStart(6,'0');
     if(!used.has(c)) return c;
@@ -1152,8 +1155,14 @@ const DB = {
   },
 
   async loadEmployees(){
-    if(!LIVE) return MEM.employees.slice();
-    return sbop(()=>sb.from('employees').select('*').order('name'));
+    if(!LIVE) return MEM.employees.filter(e=>!e.removed_at);
+    return sbop(()=>sb.from('employees').select('*').is('removed_at',null).order('name'));
+  },
+  /* Archivovani ludia — zostavaju v databaze kvoli historii zmien/vyplat,
+     len sa neukazuju v beznom zozname a nemozu sa prihlasit/pipnut. */
+  async loadArchivedEmployees(){
+    if(!LIVE) return MEM.employees.filter(e=>e.removed_at);
+    return sbop(()=>sb.from('employees').select('*').not('removed_at','is',null).order('name'));
   },
   async loadShifts(){
     if(!LIVE) return MEM.shifts.slice();
@@ -1185,13 +1194,30 @@ const DB = {
     if(!LIVE){const r=MEM.employees.find(e=>e.id===id); if(r)Object.assign(r,patch); return;}
     await sbop(()=>sb.from('employees').update(patch).eq('id',id));
   },
+  /* Odstranenie clovek NEMAZE — len ho oznaci ako archivovaneho (removed_at).
+     Zmeny a vyplaty po nom ostavaju navzdy v databaze (napr. kvoli mzdam
+     a historii), len sa uz nezobrazuje v beznom zozname a nemoze sa prihlasit
+     ani pipnut. Da sa kedykolvek vratit spat cez restoreEmployee.
+     Kontrolujeme aj, ze update naozaj zasiahol riadok — predtym sa stalo, ze
+     RLS ticho nenasla ziadny riadok (0 zasiahnutych) a appka si aj tak myslela,
+     ze sa clovek odstranil, hoci sa v databaze nic nezmenilo. */
   async removeEmployee(id){
     if(!LIVE){
-      MEM.employees=MEM.employees.filter(e=>e.id!==id);
-      MEM.shifts=MEM.shifts.filter(s=>s.employee_id!==id);return;
+      const e=MEM.employees.find(x=>x.id===id);
+      if(e) e.removed_at=new Date().toISOString();
+      return;
     }
-    await sbop(()=>sb.from('shifts').delete().eq('employee_id',id));
-    await sbop(()=>sb.from('employees').delete().eq('id',id));
+    const rows=await sbop(()=>sb.from('employees').update({removed_at:new Date().toISOString()}).eq('id',id).select('id'));
+    if(!rows||!rows.length) throw new Error('remove_failed_no_row');
+  },
+  async restoreEmployee(id){
+    if(!LIVE){
+      const e=MEM.employees.find(x=>x.id===id);
+      if(e) e.removed_at=null;
+      return;
+    }
+    const rows=await sbop(()=>sb.from('employees').update({removed_at:null}).eq('id',id).select('id'));
+    if(!rows||!rows.length) throw new Error('restore_failed_no_row');
   },
   /* --- poznamky (naklady na objednavky, ulohy a pod.) --- */
   async loadNotes(){
@@ -2004,7 +2030,8 @@ function viewCal(){
   }
 
   // mesačný súhrn (respektuje filter, ak je nastaveny)
-  const rows=S.employees.filter(e=>!filt||e.id===filt).map(e=>{
+  // vratane archivovanych — odstraneny clovek nesmie zmiznut z uz odpracovanych hodin
+  const rows=S.employees.concat(S.archivedEmployees||[]).filter(e=>!filt||e.id===filt).map(e=>{
     let h=0;
     S.shifts.forEach(s=>{
       if(s.employee_id!==e.id)return;
@@ -2017,9 +2044,10 @@ function viewCal(){
 
   const detail = S.calPick ? dayDetail(S.calPick) : '';
 
-  const filterSel = S.employees.length>1 ? `<select class="langsel" data-act="cal-filter" style="margin-bottom:12px;width:100%">
+  const filterEmps = S.employees.concat(S.archivedEmployees||[]);
+  const filterSel = filterEmps.length>1 ? `<select class="langsel" data-act="cal-filter" style="margin-bottom:12px;width:100%">
     <option value="">${t('allEmployees')}</option>
-    ${S.employees.map(e=>`<option value="${e.id}" ${filt===e.id?'selected':''}>${esc(e.name)}</option>`).join('')}
+    ${filterEmps.map(e=>`<option value="${e.id}" ${filt===e.id?'selected':''}>${esc(e.name)}${e.removed_at?' ('+t('archivedTag')+')':''}</option>`).join('')}
   </select>` : '';
 
   return costTrendChart()+`<div class="nav-week">
@@ -2130,7 +2158,7 @@ function exportMonthCsv(){
   lines.push(csvLine(['SÚHRN ZA MESIAC '+(m+1)+'/'+y]));
   lines.push(csvLine(['Meno','Odpracované (h)','Suma (€)']));
   let sumH=0, sumC=0;
-  S.employees.slice().sort((a,b)=>a.name.localeCompare(b.name,'sk')).forEach(e=>{
+  S.employees.concat(S.archivedEmployees||[]).slice().sort((a,b)=>a.name.localeCompare(b.name,'sk')).forEach(e=>{
     let h=0;
     S.shifts.forEach(s=>{
       if(s.employee_id!==e.id) return;
@@ -2486,7 +2514,24 @@ function viewPeople(){
         <button class="btn danger" data-act="del-person" data-id="${e.id}">${t('remove')}</button>
       </div>`;}).join(''):`<div class="empty"><p>${t('noPeople')}</p>
         <button class="btn" data-act="new-person">${t('addPerson')}</button></div>`}
+    ${archivedPeoplePanel()}
     ${supportPanel()}`;
+}
+/* Archivovani ludia — odstraneni z beznej prevadzky, ale ich zmeny/vyplaty
+   ostavaju zachovane. Da sa ich kedykolvek vratit spat. */
+function archivedPeoplePanel(){
+  const arch=S.archivedEmployees||[];
+  if(!arch.length) return '';
+  return `<div class="sec-head" style="margin-top:28px"><h2>${t('archivedPeopleTitle')}</h2></div>
+    <p class="help" style="margin:0 0 12px">${t('archivedPeopleHint')}</p>
+    ${arch.slice().sort((a,b)=>a.name.localeCompare(b.name,'sk')).map(e=>`
+      <div class="person" style="opacity:.7">
+        <div>
+          <div class="pname">${esc(e.name)}</div>
+          <div class="pcode">${t('codeLbl')}: <b>${esc(e.access_code||'—')}</b></div>
+        </div>
+        <button class="btn ghost" data-act="restore-person" data-id="${e.id}">${t('restoreBtn')}</button>
+      </div>`).join('')}`;
 }
 /* ---------- NASTAVENIA \u2014 vsetko, co predtym prepchavalo sekciu Ludia:
    kto zapisuje prichody, poloha/geofencing, QR plagat, stanica, cennik/predplatne,
@@ -3290,7 +3335,8 @@ function openFixModal(id){
     <div class="fg">
       <div><label>${t('changePerson')}</label>
         <select id="f-emp" style="padding:14px">
-          ${S.employees.map(x=>`<option value="${x.id}" ${x.id===sh.employee_id?'selected':''}>${esc(x.name)}</option>`).join('')}
+          ${(S.employees.some(x=>x.id===sh.employee_id)?S.employees:S.employees.concat([empById(sh.employee_id)].filter(Boolean)))
+            .map(x=>`<option value="${x.id}" ${x.id===sh.employee_id?'selected':''}>${esc(x.name)}${x.removed_at?' ('+t('archivedTag')+')':''}</option>`).join('')}
         </select></div>
       <div>
         <label>${t('plannedTime')}</label>
@@ -3699,7 +3745,7 @@ document.addEventListener('click',async ev=>{
     }
 
     case 'demo': {
-      seedDemo(); S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
+      seedDemo(); S.employees=await DB.loadEmployees(); S.archivedEmployees=await DB.loadArchivedEmployees(); S.shifts=await DB.loadShifts(); S.notes=await DB.loadNotes();
       try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
       const st=await DB.loadSettings(); applySettings(st);
       S.role='owner'; S.view='today'; render(); break;
@@ -3717,7 +3763,7 @@ document.addEventListener('click',async ev=>{
       if(!LIVE){ S.loginErr=t('demoNote'); render(); return; }
       try{
         await DB.signIn(email,pass);
-        S.employees=await DB.loadEmployees(); S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
+        S.employees=await DB.loadEmployees(); try{ S.archivedEmployees=await DB.loadArchivedEmployees(); }catch(e){ S.archivedEmployees=[]; } S.shifts=await DB.loadShifts(); try{ S.notes=await DB.loadNotes(); }catch(e){}
         try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
         try{ const st=await DB.loadSettings(); applySettings(st); }catch(e){}
         S.role='owner'; S.loginErr=''; render();
@@ -4092,9 +4138,31 @@ document.addEventListener('click',async ev=>{
       const id=el.dataset.id;
       try{
         await DB.removeEmployee(id);
-        S.employees=S.employees.filter(x=>x.id!==id);
-        S.shifts=S.shifts.filter(x=>x.employee_id!==id);
-        toast(t('removed')); render();
+        const idx=S.employees.findIndex(x=>x.id===id);
+        if(idx>=0){
+          const e=S.employees[idx];
+          e.removed_at=new Date().toISOString();
+          S.employees.splice(idx,1);
+          S.archivedEmployees=S.archivedEmployees||[];
+          S.archivedEmployees.push(e);
+        }
+        /* zmeny/vyplaty ostavaju — nic sa nemaze zo S.shifts */
+        toast(t('archived')); render();
+      }catch(err){ dbErr(err); }
+      break;
+    }
+    case 'restore-person': {
+      const id=el.dataset.id;
+      try{
+        await DB.restoreEmployee(id);
+        const idx=(S.archivedEmployees||[]).findIndex(x=>x.id===id);
+        if(idx>=0){
+          const e=S.archivedEmployees[idx];
+          e.removed_at=null;
+          S.archivedEmployees.splice(idx,1);
+          S.employees.push(e); S.employees.sort((a,b)=>a.name.localeCompare(b.name,'sk'));
+        }
+        toast(t('restored')); render();
       }catch(err){ dbErr(err); }
       break;
     }
@@ -4259,6 +4327,7 @@ setInterval(()=>{
       const ses=await DB.session();
       if(ses){
         S.employees=await DB.loadEmployees();
+        try{ S.archivedEmployees=await DB.loadArchivedEmployees(); }catch(e){ S.archivedEmployees=[]; }
         S.shifts=await DB.loadShifts();
         try{ S.notes=await DB.loadNotes(); }catch(e){}
         try{ S.payments=await DB.loadPayments(); }catch(e){ S.payments=[]; }
