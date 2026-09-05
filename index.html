@@ -651,6 +651,19 @@ function stationTokenFromUrl(){
   }catch(e){}
   return null;
 }
+/* Volitelny parameter ?sposob=qr|tvar pri dedikovanej stanici — obmedzi,
+   ktore rozpoznavanie bezi (predvolene obe naraz). */
+function scanModeFromUrl(){
+  try{
+    const v=new URLSearchParams(location.search).get('sposob');
+    if(v==='qr'||v==='tvar') return v;
+  }catch(e){}
+  return 'both';
+}
+/* Token stanice pouzity aj mimo dedikovanej ?stanica= adresy — ked
+   majitel otvori skener priamo z Dnes/Nastaveni, pouzije sa jeho vlastny
+   qr_token (uz je prihlaseny, netreba URL kolo). */
+function currentStationToken(){ return S.stationToken || S.qrToken; }
 function joinCodeFromUrl(){
   try{ return new URLSearchParams(location.search).get('join'); }catch(e){ return null; }
 }
@@ -743,6 +756,8 @@ const S = {
   stationToken:null,     // ?stanica=TOKEN — appka bezi ako skener, ziadne prihlasenie
   stationMsg:null,       // {ok, text} — posledny vysledok skenovania (docasne hlasenie)
   stationErr:null,       // chyba pri spustani kamery ('denied' | 'missing' | null)
+  scannerOpen:false,     // skener otvoreny ako okno nad bezne prihlasenou appkou (Dnes/Nastavenia)
+  scannerMode:'both',    // 'both' | 'qr' | 'tvar' — ktore rozpoznavanie bezi v tomto skeneri
   theme:'dark',          // 'dark' | 'light' — len na tomto zariadeni (localStorage), nie v DB
   landing:true           // ukaz najprv marketingovu uvodnu stranku, nie rovno prihlasenie
 };
@@ -1368,31 +1383,73 @@ const DB = {
     return (data&&data[0])||null;
   },
 
+  /* Vracia POLE 1-2 zmien: normalne len tu, ktorej sa akcia tykala; ale ak
+     niekto zabudol vypnut prestavku a vrati sa (break_end) az po 90 min,
+     povodna zmena sa uzavrie presne v 90. minute (nie teraz — inak by mu
+     to zapisalo hodinovu-a-polovu prestavku) a rovno zacne NOVA zmena —
+     preto vtedy pole obsahuje obe. Volajuci to musi oba riadky ulozit. */
   async empPunch(code, shiftId, action, pos, qr){
     if(!LIVE){
       if(MEM.settings.punch_mode!=='self') throw new Error('not allowed');
       const sh=MEM.shifts.find(x=>x.id===shiftId);
       const me=MEM.employees.find(e=>String(e.access_code)===code);
       if(!sh||!me||sh.employee_id!==me.id||sh.date!==todayISO()) throw new Error('not allowed');
-      const nowIso=new Date().toISOString();
+      const CUTOFF_MS=90*60000;
+      const now=new Date(), nowIso=now.toISOString();
       const list=Array.isArray(sh.breaks)?sh.breaks.slice():[];
       const open=list.length&&!list[list.length-1].e ? list[list.length-1] : null;
-      if(action==='in'  && !sh.arrival) sh.arrival=nowIso;
+      const openMs = open ? new Date(open.s).getTime() : null;
+      const overdue = !!open && (now.getTime()-openMs)>CUTOFF_MS;
+      if(action==='in' && !sh.arrival){ sh.arrival=nowIso; return [sh]; }
       if(action==='out' && sh.arrival && !sh.departure){
-        if(open){ list[list.length-1]={...open,e:nowIso}; sh.breaks=list; }
-        sh.departure=nowIso;
+        if(open){
+          const cutIso = overdue ? new Date(openMs+CUTOFF_MS).toISOString() : nowIso;
+          list[list.length-1]={...open,e:cutIso}; sh.breaks=list;
+          sh.departure=cutIso;
+        } else {
+          sh.departure=nowIso;
+        }
+        return [sh];
       }
       if(action==='break_start' && sh.arrival && !sh.departure && !open){
         list.push({s:nowIso,e:null}); sh.breaks=list;
+        return [sh];
       }
-      if(action==='break_end' && open){ list[list.length-1]={...open,e:nowIso}; sh.breaks=list; }
-      return sh;
+      if(action==='break_end' && open){
+        if(overdue){
+          const cutIso=new Date(openMs+CUTOFF_MS).toISOString();
+          list[list.length-1]={...open,e:cutIso}; sh.breaks=list; sh.departure=cutIso;
+          const fresh={id:'s'+Date.now()+Math.random().toString(36).slice(2,6),employee_id:me.id,date:todayISO(),
+            plan_start:null,plan_end:null,arrival:nowIso,departure:null,breaks:[]};
+          MEM.shifts.push(fresh);
+          return [sh, fresh];
+        }
+        list[list.length-1]={...open,e:nowIso}; sh.breaks=list;
+        return [sh];
+      }
+      return [sh];
     }
     const data = await sbop(()=>sb.rpc('emp_punch_geo',{
       p_code:code, p_shift:shiftId, p_action:action,
       p_lat:(pos&&pos.lat)??null, p_lon:(pos&&pos.lon)??null,
       p_acc:(pos&&pos.acc)??null, p_qr:qr||null}));
     return data||null;
+  },
+  /* Samoobslusne vratenie omylom ukoncenej zmeny (dnes, len ta posledna). */
+  async empUndoDeparture(code, shiftId){
+    if(!LIVE){
+      if(MEM.settings.punch_mode!=='self') throw new Error('not allowed');
+      const sh=MEM.shifts.find(x=>x.id===shiftId);
+      const me=MEM.employees.find(e=>String(e.access_code)===code);
+      if(!sh||!me||sh.employee_id!==me.id||sh.date!==todayISO()||!sh.departure) throw new Error('not allowed');
+      const todays=MEM.shifts.filter(x=>x.employee_id===me.id&&x.date===todayISO()&&x.arrival);
+      const maxArrival=todays.reduce((m,x)=>(!m||x.arrival>m)?x.arrival:m, null);
+      if(sh.arrival!==maxArrival) throw new Error('not latest shift');
+      sh.departure=null;
+      return sh;
+    }
+    const data = await sbop(()=>sb.rpc('emp_undo_departure',{p_code:code, p_shift:shiftId}));
+    return (data&&data[0])||null;
   },
 
   /* Skener v prevadzke: appka sa sama rozhodne, ci ide o prichod alebo
@@ -1558,7 +1615,8 @@ const root=document.getElementById('root');
 const modalHost=document.getElementById('modal');
 
 function render(){
-  if(S.stationToken){ root.innerHTML=viewStation(); return; }
+  if(S.stationToken){ root.innerHTML=viewStation(false); return; }
+  if(S.scannerOpen){ root.innerHTML=viewStation(true); return; }
   if(!S.role){ root.innerHTML = S.landing ? viewLanding() : viewLogin(); return; }
   setTimeout(()=>{ if(S.showQR && S.view==='settings') drawQR(); },0);
   const st = subState();
@@ -1803,10 +1861,11 @@ function viewToday(){
     return head+`<div class="empty"><p>${t('noPeople')}</p>
       <button class="btn" data-act="view" data-v="people">${t('addPerson')}</button></div>`;
   }
+  const scanRow = scannerButtonsHtml();
   if(!list.length){
     // Ziadna naplanovana zmena NEZNAMENA, ze sa nedá dat prichod.
     // Preto tu musi byt aj zoznam ludi s tlacidlom Prichod teraz.
-    return head+`<p class="plainline quiet">${t('noShiftsToday')}</p>
+    return head+scanRow+`<p class="plainline quiet">${t('noShiftsToday')}</p>
       ${unscheduledBlock(list)}
       <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('planShift')}</button>`;
   }
@@ -1814,7 +1873,7 @@ function viewToday(){
   // pri viac ludoch je hned vidno, kto prave robi, bez skrolovania.
   const rank = s => (s.arrival && !s.departure) ? 0 : (!s.arrival ? 1 : 2);
   const sorted = [...list].sort((a,b)=>rank(a)-rank(b));
-  return head+toggle+`<div class="cards">${sorted.map(card).join('')}</div>
+  return head+toggle+scanRow+`<div class="cards">${sorted.map(card).join('')}</div>
     ${unscheduledBlock(list)}
     <button class="addrow" data-act="new-shift" data-date="${todayISO()}">+ ${t('addShift')}</button>`;
 }
@@ -2550,7 +2609,7 @@ function viewSettings(){
   </div>`;
   const geo = geoPanel();
   const qr = qrPanel();
-  const station = stationPanel();
+  const station = stationPanel() + scannerButtonsHtml();
   const theme = `<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('themeTitle')}</div>
     <div class="presets" style="grid-template-columns:1fr 1fr">
@@ -2828,6 +2887,22 @@ function stationPanel(){
   </div>`;
 }
 
+/* ---------- skener otvoreny priamo v appke (Nastavenia aj Dnes) ----------
+   Funguje vzdy, bez ohladu na zvoleny sposob pipania (Majitel/Sam/Stanica) —
+   kamera/QR je jednoducho dalsia moznost, ako niekoho odpipnut. Rozpoznanie
+   je automaticke, netreba pred tym nikoho vyberat zo zoznamu. */
+function scannerButtonsHtml(){
+  return `<div class="panel" style="margin-bottom:18px">
+    <div class="eyebrow" style="margin-bottom:10px">${t('scanTitle')}</div>
+    <p class="help" style="margin:0 0 12px">${t('scanHint')}</p>
+    <div class="presets" style="grid-template-columns:1fr 1fr 1fr">
+      <button data-act="open-scanner" data-v="both">${t('scanBoth')}</button>
+      <button data-act="open-scanner" data-v="tvar">${t('scanFaceOnly')}</button>
+      <button data-act="open-scanner" data-v="qr">${t('scanQrOnly')}</button>
+    </div>
+  </div>`;
+}
+
 /* ---------- zamestnanec: vlastny QR kod (ukaze ho skeneru v prevadzke) ---------- */
 function myQrModalBody(){
   return `<div class="scrim" data-act="scrim"><div class="sheet">
@@ -2864,7 +2939,11 @@ function drawMyQR(){
    Ziadne prihlasenie, ziadny S.role — hocijake zariadenie s kamerou, ktore
    ostane pri vchode. Po nacitani appka SAMA rozhodne, ci ide o prichod
    alebo odchod (podla toho, ci ma clovek dnes uz otvorenu zmenu). */
-function viewStation(){
+function viewStation(closable){
+  const closeBtn = closable ? `<button data-act="scanner-close" aria-label="${t('close')||t('cancel')}"
+      style="position:absolute;top:16px;right:16px;width:44px;height:44px;border-radius:50%;
+      border:none;background:rgba(0,0,0,.5);color:var(--bone);font-size:20px;line-height:44px;
+      text-align:center;cursor:pointer">✕</button>` : '';
   return `<div style="position:fixed;inset:0;background:#000;overflow:hidden">
     <video id="station-video" autoplay playsinline muted
       style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover"></video>
@@ -2876,6 +2955,7 @@ function viewStation(){
     <div style="position:absolute;top:24px;left:0;right:0;text-align:center;color:var(--bone);
       font-family:var(--disp);text-transform:uppercase;letter-spacing:.14em;font-weight:700;
       font-size:20px;text-shadow:0 1px 4px rgba(0,0,0,.6)">turn<b style="color:var(--brass)">o</b></div>
+    ${closeBtn}
     <div id="station-status" style="position:absolute;bottom:40px;left:16px;right:16px;text-align:center;
       font-size:19px;font-weight:600;color:var(--bone);text-shadow:0 1px 4px rgba(0,0,0,.7)">${esc(t('stationReady'))}</div>
   </div>`;
@@ -2917,32 +2997,46 @@ async function ensureFaceApi(){
   }
 }
 let stationBusy=false, stationLastTick=0, stationFaces=[], stationFaceReady=false;
-async function startStation(){
+let stationStream=null, stationStopRequested=false;
+/* Zatvorenie skenera otvoreneho nad appkou (Dnes/Nastavenia) — vypne
+   kameru a zastavi obe slucky, aby nebezali na pozadi zbytocne. Dedikovana
+   stanica (?stanica=) toto nikdy nevola, bezi donekonecna zamerne. */
+function stopStation(){
+  stationStopRequested = true;
+  if(stationStream){ try{ stationStream.getTracks().forEach(tr=>tr.stop()); }catch(e){} stationStream=null; }
+  stationBusy=false; stationFaces=[]; stationFaceReady=false;
+}
+async function startStation(mode){
+  stationStopRequested = false;
+  const wantQr = mode!=='tvar';
+  const wantFace = mode!=='qr';
   const video=document.getElementById('station-video');
   if(!video) return;
-  let stream;
   try{
-    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
+    stationStream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment'}, audio:false});
   }catch(e){
     stationSetMsg((e&&e.name==='NotFoundError')?t('stationCamMissing'):t('stationCamDenied'), 'err');
     return;
   }
-  video.srcObject=stream;
+  video.srcObject=stationStream;
   try{ await video.play(); }catch(e){}
 
   /* Chrome/Android maju rychlu vstavanu citacku (BarcodeDetector). iOS Safari
      ju nema, tam pouzijeme jsQR (dotiahneme az teraz, aby to nezatazovalo
      appku, ked skener nikto nepouziva). */
   let detector=null;
-  if('BarcodeDetector' in window){
-    try{ detector=new window.BarcodeDetector({formats:['qr_code']}); }catch(e){ detector=null; }
+  if(wantQr){
+    if('BarcodeDetector' in window){
+      try{ detector=new window.BarcodeDetector({formats:['qr_code']}); }catch(e){ detector=null; }
+    }
+    if(!detector) await loadScriptOnce('jsqr.js');
   }
-  if(!detector) await loadScriptOnce('jsqr.js');
 
   const canvas=document.getElementById('station-canvas');
   const ctx=canvas.getContext('2d',{willReadFrequently:true});
 
   async function tick(now){
+    if(stationStopRequested) return;
     if(!stationBusy && video.readyState>=2 && (now-stationLastTick)>180){
       stationLastTick=now;
       try{
@@ -2962,16 +3056,18 @@ async function startStation(){
     }
     requestAnimationFrame(tick);
   }
-  requestAnimationFrame(tick);
+  if(wantQr) requestAnimationFrame(tick);
 
+  if(!wantFace) return;
   /* Rozpoznavanie tvare beží popri QR skeneri, nezavisle od neho — ak sa
      nenacita (napr. ziadny internet na CDN) alebo vlastnik ziadne tvare
      nenastavil, QR skenovanie funguje dalej bez zmeny. */
   (async()=>{
     try{
-      const rows = await DB.stationFaceData(S.stationToken);
+      const rows = await DB.stationFaceData(currentStationToken());
       if(!rows || !rows.length) return;
       await ensureFaceApi();
+      if(stationStopRequested) return;
       stationFaces = rows.map(r=>({id:r.id, name:r.name,
         descriptors:(r.face_descriptors||[]).map(d=>new Float32Array(d))}));
       stationFaceReady = true;
@@ -2981,6 +3077,7 @@ async function startStation(){
 
   let faceLastTick=0;
   async function faceTick(now){
+    if(stationStopRequested) return;
     if(stationFaceReady && !stationBusy && video.readyState>=2 && (now-faceLastTick)>700){
       faceLastTick=now;
       try{
@@ -3008,7 +3105,7 @@ async function handleStationCode(raw){
   stationBusy=true;
   stationSetMsg('…', null);
   try{
-    const r=await DB.empPunchStation(m[1], S.stationToken);
+    const r=await DB.empPunchStation(m[1], currentStationToken());
     if(!r) throw new Error('zly_kod');
     const label = r.action==='in' ? t('arrive') : r.action==='break' ? t('breakStart') : t('breakEnd');
     stationSetMsg((r.name?r.name+' — ':'')+label+' ✓', 'ok');
@@ -3022,7 +3119,7 @@ async function handleStationFace(employeeId, name){
   stationBusy=true;
   stationSetMsg('…', null);
   try{
-    const r=await DB.punchStationFace(employeeId, S.stationToken);
+    const r=await DB.punchStationFace(employeeId, currentStationToken());
     if(!r) throw new Error('zly_kod');
     const label = r.action==='in' ? t('arrive') : r.action==='break' ? t('breakStart') : t('breakEnd');
     stationSetMsg((((r&&r.name)||name)?((r&&r.name)||name)+' — ':'')+label+' ✓', 'ok');
@@ -3049,7 +3146,7 @@ function supportPanel(){
 /* ---------- zamestnanec: moje zmeny ---------- */
 /* Karta pre zamestnanca na dnesnu zmenu. Ziadne mzdy, ziadne mazanie —
    len jeho prichod, prestavka a odchod. Zobrazi sa len ked to vlastnik povolil. */
-function myCard(sh){
+function myCard(sh, isLatest){
   const br=onBreak(sh);
   const h=hoursOf(sh), bh=breakHoursOf(sh);
   const st = sh.departure ? 'done' : br ? 'paused' : sh.arrival ? 'working' : '';
@@ -3068,7 +3165,9 @@ function myCard(sh){
       <button class="punch-big out" data-act="my-out" data-id="${sh.id}">${t('leave')}</button>
       <button class="punch-sec" data-act="my-break-start" data-id="${sh.id}">${t('breakStart')}</button>`;
   }else{
-    body=`<div class="status fin">${t('doneLbl')} \u00b7 <b class="${fresh}">${durLong(h)}</b></div>`;
+    // ak nahodou pipol odchod omylom, moze si zmenu vratit \u2014 len tu poslednu dnesnu
+    const undoBtn = isLatest ? `<button class="linkish" data-act="my-undo-out" data-id="${sh.id}">${t('resumeShiftBtn')}</button>` : '';
+    body=`<div class="status fin">${t('doneLbl')} \u00b7 <b class="${fresh}">${durLong(h)}</b></div>${undoBtn}`;
   }
   return `<div class="card ${st}">
     <div class="card-top"><div>
@@ -3141,7 +3240,8 @@ function viewMine(){
   }else if(S.punchMode!=='self'){
     todayBlock=`<p class="plainline quiet">${t('readOnlyNote')}</p>`;
   }else if(today.length){
-    todayBlock=`<div class="cards" style="margin-bottom:20px">${today.map(myCard).join('')}</div>`;
+    const maxArrival = today.reduce((m,s)=>(s.arrival&&(!m||s.arrival>m))?s.arrival:m, null);
+    todayBlock=`<div class="cards" style="margin-bottom:20px">${today.map(s=>myCard(s, !!s.arrival && s.arrival===maxArrival)).join('')}</div>`;
   }else{
     // zmenu naplanovanu nema, ale prisiel — nech si moze dat prichod
     todayBlock=`<div class="card" style="margin-bottom:20px">
@@ -3575,6 +3675,19 @@ document.addEventListener('click',async ev=>{
       if(S.view==='admin' && S.adminRows===null) loadAdmin(); render(); break;
     case 'export-csv': exportMonthCsv(); break;
     case 'my-qr': openModal(myQrModalBody()); setTimeout(drawMyQR,0); break;
+    case 'open-scanner': {
+      S.scannerMode = el.dataset.v || 'both';
+      S.scannerOpen = true;
+      render();
+      setTimeout(()=>startStation(S.scannerMode), 0);
+      break;
+    }
+    case 'scanner-close': {
+      stopStation();
+      S.scannerOpen = false;
+      render();
+      break;
+    }
     case 'month': S.calCursor=new Date(S.calCursor.getFullYear(),S.calCursor.getMonth()+(+el.dataset.v),1);
                   S.calPick=null; render(); break;
     case 'pickday': S.calPick = S.calPick===el.dataset.v ? null : el.dataset.v; render(); break;
@@ -3644,6 +3757,21 @@ document.addEventListener('click',async ev=>{
       }catch(e){ toast(t('readOnlyNote')); }
       break;
     }
+    /* Omylom ukoncena zmena — zamestnanec si ju moze sam vratit, ak je to
+       este dnesna, posledna zmena (databaza to overi znova, tomuto klientu
+       sa never). */
+    case 'my-undo-out': {
+      const id=el.dataset.id;
+      try{
+        const sh=await DB.empUndoDeparture(S.myCode, id);
+        if(sh){
+          const i=S.shifts.findIndex(x=>x.id===sh.id);
+          if(i>=0) S.shifts[i]={...S.shifts[i], ...sh};
+        }
+        S.justStamped=id; render(); S.justStamped=null;
+      }catch(e){ toast(t('readOnlyNote')); }
+      break;
+    }
     case 'my-in': case 'my-out': case 'my-break-start': case 'my-break-end': {
       const map={'my-in':'in','my-out':'out','my-break-start':'break_start','my-break-end':'break_end'};
       const id=el.dataset.id;
@@ -3664,10 +3792,15 @@ document.addEventListener('click',async ev=>{
       }
       try{
         const upd=await DB.empPunch(S.myCode, id, map[a], pos, S.qrScanned);
-        if(upd){
-          const i=S.shifts.findIndex(x=>x.id===id);
-          if(i>=0) S.shifts[i]={...S.shifts[i], ...upd};
-        }
+        /* Normalne pole s jednym riadkom (tato zmena); ked niekto zabudol
+           vypnut prestavku dlhsie ako 90 min, pribudne aj druhy — nova,
+           uz bezaica zmena — tu treba pridat, nie len zluzit. */
+        (Array.isArray(upd)?upd:(upd?[upd]:[])).forEach(row=>{
+          if(!row||!row.id) return;
+          const i=S.shifts.findIndex(x=>x.id===row.id);
+          if(i>=0) S.shifts[i]={...S.shifts[i], ...row};
+          else S.shifts.push(row);
+        });
         S.justStamped=id; render(); S.justStamped=null;
       }catch(e){ toast(punchErr(e)); }
       break;
@@ -3996,6 +4129,7 @@ document.addEventListener('click',async ev=>{
     }
     case 'signout':
       await DB.signOut(); S.role=null; S.me=null; S.loginErr=''; S.platneDo=null; S.landing=true; S.loginTab='owner';
+      S.scannerOpen=false;
       try{ localStorage.removeItem(EMP_CODE_KEY); }catch(e){}
       render(); break;
 
@@ -4317,7 +4451,7 @@ setInterval(()=>{
   setLang(langFromUrl());
   /* Stanica nepotrebuje ziadne prihlasenie, ide rovno do skenera. */
   S.stationToken=stationTokenFromUrl();
-  if(S.stationToken){ render(); startStation(); return; }
+  if(S.stationToken){ render(); startStation(scanModeFromUrl()); return; }
   const jc=joinCodeFromUrl();
   if(jc){ S.joinCode=jc; S.loginTab='join'; S.landing=false; }
   S.qrScanned=qrFromUrl();
