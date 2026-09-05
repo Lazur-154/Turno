@@ -31,6 +31,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
 <style>
 :root{
   --ink:#0E2530;
@@ -548,6 +549,7 @@ body.locked{overflow:hidden}
 
 <script src="lang.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 <script>
 /* ============================================================
    TURNO v2 — konfigurácia
@@ -729,8 +731,10 @@ const S = {
   adminBusy:false,
   payTier:null,         // plan, ktory si clovek vybral v platobnom paneli (null = ten, co ma)
   geoOn:false,          // plati okruh okolo prevadzky?
+  geoMode:'circle',     // 'circle' (bod + polomer) | 'polygon' (vlastny tvar na mape)
   geoRadius:100,        // polomer v metroch
   geoLat:null, geoLon:null,
+  geoPolygon:null,      // [{lat,lon}, ...] — vlastny tvar, aspon 3 body
   qrToken:null,         // tajny kod z QR plagatu (vlastnik ho vidi, zamestnanec skenuje)
   qrScanned:null,       // token z adresy ?qr=... pri tomto otvoreni appky
   geoBusy:false,
@@ -785,6 +789,7 @@ function punchErr(e){
     const d = (m.match(/prilis_daleko:(\d+)/)||[])[1];
     return t('geoTooFar').replace('{m}', d||'?').replace('{r}', S.geoRadius);
   }
+  if(m.indexOf('mimo_oblasti')>=0) return t('geoOutsideArea');
   if(m.indexOf('poloha_chyba')>=0) return t('geoNoFix');
   if(m.indexOf('zly_qr')>=0) return t('qrBad');
   if(m.indexOf('miesto_nenastavene')>=0) return t('geoWarnNoPlace');
@@ -841,9 +846,11 @@ function applySettings(st){
   S.platneDo = st.platne_do || null;
   S.typPredplatneho = st.typ_predplatneho || 'mesacne';
   S.geoOn = !!st.geo_on;
+  S.geoMode = st.geo_mode==='polygon' ? 'polygon' : 'circle';
   S.geoRadius = st.geo_radius || 100;
   S.geoLat = (st.geo_lat===null||st.geo_lat===undefined) ? null : Number(st.geo_lat);
   S.geoLon = (st.geo_lon===null||st.geo_lon===undefined) ? null : Number(st.geo_lon);
+  S.geoPolygon = Array.isArray(st.geo_polygon) ? st.geo_polygon : null;
   S.qrToken = st.qr_token || null;
 }
 function subState(){
@@ -1194,11 +1201,11 @@ const DB = {
   /* --- nastavenie, kto zapisuje prichody a pozyvaci kod pre novych ludi --- */
   async loadSettings(){
     if(!LIVE) return {punch_mode: MEM.settings.punch_mode, invite_code: MEM.settings.invite_code, people_limit: MEM.settings.people_limit, platne_do: null, typ_predplatneho: 'mesacne', geo_on:false, geo_radius:100, qr_token:'DEMO'};
-    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_lat, geo_lon, geo_radius, qr_token').maybeSingle());
+    const data = await sbop(()=>sb.from('settings').select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_mode, geo_lat, geo_lon, geo_radius, geo_polygon, qr_token').maybeSingle());
     if(!data){
       // prvy start: zaloz riadok s predvolenym nastavenim (pozyvaci kod si databaza vygeneruje sama)
       const payload = S.ownerId ? {owner_id:S.ownerId, punch_mode:'owner'} : {punch_mode:'owner'};
-      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_lat, geo_lon, geo_radius, qr_token').single());
+      const ins = await sbop(()=>sb.from('settings').insert(payload).select('punch_mode, invite_code, people_limit, platne_do, typ_predplatneho, geo_on, geo_mode, geo_lat, geo_lon, geo_radius, geo_polygon, qr_token').single());
       return ins||{punch_mode:'owner', people_limit:3};
     }
     return data;
@@ -2547,7 +2554,9 @@ function subBanner(st){
 }
 /* ---------- vlastnik: kde stoji prevadzka ---------- */
 function geoPanel(){
-  const mam = (S.geoLat!==null && S.geoLon!==null);
+  const isPoly = S.geoMode==='polygon';
+  const polyN = Array.isArray(S.geoPolygon) ? S.geoPolygon.length : 0;
+  const mam = isPoly ? polyN>=3 : (S.geoLat!==null && S.geoLon!==null);
   const radiusy = [50,100,200,500];
   return `<div class="panel" style="margin-bottom:18px">
     <div class="eyebrow" style="margin-bottom:10px">${t('geoTitle')}</div>
@@ -2556,16 +2565,96 @@ function geoPanel(){
       <button data-act="geo-on" data-v="0" aria-pressed="${!S.geoOn}">${t('geoOff')}</button>
       <button data-act="geo-on" data-v="1" aria-pressed="${S.geoOn}">${t('geoOnLbl')}</button>
     </div>
+    <div class="presets" style="grid-template-columns:1fr 1fr;margin-bottom:12px">
+      <button data-act="geo-mode" data-v="circle" aria-pressed="${!isPoly}">${t('geoModeCircle')}</button>
+      <button data-act="geo-mode" data-v="polygon" aria-pressed="${isPoly}">${t('geoModePolygon')}</button>
+    </div>
     <div class="paygrid" style="margin-bottom:12px">
-      <span>${t('geoPlace')}</span><b>${mam?esc(S.geoLat.toFixed(5)+', '+S.geoLon.toFixed(5)):t('geoNotSet')}</b>
-      <span>${t('geoRadius')}</span><b>${S.geoRadius} m</b>
+      <span>${t('geoPlace')}</span><b>${
+        !mam ? t('geoNotSet')
+        : isPoly ? t('geoPolygonSet').replace('{n}', polyN)
+        : esc(S.geoLat.toFixed(5)+', '+S.geoLon.toFixed(5))
+      }</b>
+      ${isPoly?'':`<span>${t('geoRadius')}</span><b>${S.geoRadius} m</b>`}
     </div>
-    <div class="presets" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
+    ${isPoly?'':`<div class="presets" style="grid-template-columns:repeat(4,1fr);margin-bottom:12px">
       ${radiusy.map(r=>`<button data-act="geo-radius" data-v="${r}" aria-pressed="${S.geoRadius===r}">${r} m</button>`).join('')}
+    </div>`}
+    <div class="presets" style="grid-template-columns:${isPoly?'1fr':'1fr 1fr'};margin-bottom:12px">
+      <button class="btn ghost" data-act="geo-map-open">🗺 ${t('geoMapBtn')}</button>
+      ${isPoly?'':`<button class="btn ghost" data-act="geo-here"${S.geoBusy?' disabled':''}>${S.geoBusy?t('geoWorking'):t('geoUseHere')}</button>`}
     </div>
-    <button class="btn ghost" data-act="geo-here"${S.geoBusy?' disabled':''}>${S.geoBusy?t('geoWorking'):t('geoUseHere')}</button>
     ${S.geoOn&&!mam?`<p class="help" style="margin:10px 0 0;color:var(--accent)">${t('geoWarnNoPlace')}</p>`:''}
   </div>`;
+}
+/* ---------- vlastnik: vyber polohy/oblasti na mape (Leaflet) ---------- */
+function geoMapModalBody(){
+  const isPoly = S.geoMode==='polygon';
+  return `<div class="scrim" data-act="scrim"><div class="sheet">
+    <div class="sheet-head"><h3>${t('geoMapTitle')}</h3>
+      <button class="sheet-x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <p class="help" style="margin:0 0 10px">${isPoly?t('geoMapHintPolygon'):t('geoMapHintCircle')}</p>
+    <div id="geo-map-el" style="height:320px;border-radius:12px;overflow:hidden;background:var(--ink-2)"></div>
+    ${isPoly?`<p class="help" id="geo-map-count" style="margin:8px 0 0">${t('geoMapPoints').replace('{n}',0)}</p>`:''}
+    <div class="sheet-act" style="margin-top:14px">
+      ${isPoly?`<button class="btn ghost" data-act="geo-map-undo">${t('geoMapUndo')}</button>`:''}
+      <button class="btn ghost" data-act="geo-map-clear">${t('geoMapClear')}</button>
+      <button class="btn" data-act="geo-map-save">${t('geoMapSave')}</button>
+    </div>
+  </div></div>`;
+}
+function openGeoMapModal(){
+  openModal(geoMapModalBody());
+  const isPoly = S.geoMode==='polygon';
+  const initial = isPoly
+    ? (Array.isArray(S.geoPolygon)?S.geoPolygon:[]).map(p=>[p.lat,p.lon])
+    : (S.geoLat!==null&&S.geoLon!==null ? [[S.geoLat,S.geoLon]] : []);
+  const center = initial.length ? initial[0] : [48.6690,19.6990];
+  const zoom = initial.length ? 17 : 7;
+  const map = L.map('geo-map-el').setView(center, zoom);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom:19, attribution:'© OpenStreetMap'
+  }).addTo(map);
+  const st = { map, points: initial.map(p=>({lat:p[0],lng:p[1]})), markers:[], shape:null, circle:null };
+  window.__geoMapState = st;
+  redrawGeoMap();
+  if(initial.length>1) map.fitBounds(L.latLngBounds(initial));
+  /* ak este nic nie je nastavene, skusi (bez blokovania) vycentrovat na polohu telefonu */
+  if(!initial.length){
+    getPos(6000).then(pos=>{
+      if(pos && window.__geoMapState===st) map.setView([pos.lat,pos.lon], 16);
+    });
+  }
+  map.on('click', e=>{
+    const cur = window.__geoMapState; if(!cur) return;
+    const isPolyNow = S.geoMode==='polygon';
+    if(isPolyNow) cur.points.push(e.latlng);
+    else cur.points = [e.latlng];
+    redrawGeoMap();
+  });
+}
+function geoMapAccent(){
+  try{ return getComputedStyle(document.documentElement).getPropertyValue('--verdigris').trim()||'#3FA787'; }
+  catch(e){ return '#3FA787'; }
+}
+function redrawGeoMap(){
+  const st = window.__geoMapState; if(!st) return;
+  const accent = geoMapAccent();
+  st.markers.forEach(m=>st.map.removeLayer(m)); st.markers=[];
+  if(st.shape){ st.map.removeLayer(st.shape); st.shape=null; }
+  if(st.circle){ st.map.removeLayer(st.circle); st.circle=null; }
+  const isPoly = S.geoMode==='polygon';
+  st.points.forEach(ll=>{
+    st.markers.push(L.circleMarker(ll,{radius:6,color:accent,weight:2,fillColor:accent,fillOpacity:0.9}).addTo(st.map));
+  });
+  if(isPoly){
+    if(st.points.length>=3) st.shape=L.polygon(st.points,{color:accent,weight:2,fillOpacity:0.18}).addTo(st.map);
+    else if(st.points.length===2) st.shape=L.polyline(st.points,{color:accent,weight:2}).addTo(st.map);
+    const countEl=document.getElementById('geo-map-count');
+    if(countEl) countEl.textContent = t('geoMapPoints').replace('{n}', st.points.length);
+  } else if(st.points.length){
+    st.circle = L.circle(st.points[0], {radius:S.geoRadius||100, color:accent, weight:2, fillOpacity:0.12}).addTo(st.map);
+  }
 }
 /* ---------- vlastnik: QR plagat na stenu ---------- */
 function qrPanel(){
@@ -3137,6 +3226,7 @@ function openPersonModal(){
 }
 function closeModal(){
   S.subModal=false;
+  if(window.__geoMapState){ try{ __geoMapState.map.remove(); }catch(e){} window.__geoMapState=null; }
   modalHost.innerHTML='';
   document.body.classList.remove('locked');
 }
@@ -3445,8 +3535,18 @@ document.addEventListener('click',async ev=>{
     }
     case 'geo-on': {
       const on = el.dataset.v==='1';
-      if(on && (S.geoLat===null || S.geoLon===null)){ toast(t('geoWarnNoPlace')); break; }
+      const mam = S.geoMode==='polygon'
+        ? (Array.isArray(S.geoPolygon) && S.geoPolygon.length>=3)
+        : (S.geoLat!==null && S.geoLon!==null);
+      if(on && !mam){ toast(t('geoWarnNoPlace')); break; }
       try{ await DB.saveGeo({geo_on:on}); S.geoOn=on; toast(t('saved')); render(); }
+      catch(err){ dbErr(err); }
+      break;
+    }
+    case 'geo-mode': {
+      const mode = el.dataset.v==='polygon' ? 'polygon' : 'circle';
+      if(mode===S.geoMode) break;
+      try{ await DB.saveGeo({geo_mode:mode}); S.geoMode=mode; render(); }
       catch(err){ dbErr(err); }
       break;
     }
@@ -3467,6 +3567,37 @@ document.addEventListener('click',async ev=>{
         toast(t('geoSaved'));
       }catch(err){ dbErr(err); }
       render();
+      break;
+    }
+    case 'geo-map-open': openGeoMapModal(); break;
+    case 'geo-map-undo': {
+      const st=window.__geoMapState; if(!st||!st.points.length) break;
+      st.points.pop(); redrawGeoMap();
+      break;
+    }
+    case 'geo-map-clear': {
+      const st=window.__geoMapState; if(!st) break;
+      st.points=[]; redrawGeoMap();
+      break;
+    }
+    case 'geo-map-save': {
+      const st=window.__geoMapState; if(!st) break;
+      const isPoly = S.geoMode==='polygon';
+      if(isPoly && st.points.length<3){ toast(t('geoMapNeedPoints')); break; }
+      if(!isPoly && !st.points.length){ toast(t('geoMapNeedPoint')); break; }
+      try{
+        if(isPoly){
+          const geo_polygon = st.points.map(p=>({lat:p.lat, lon:p.lng}));
+          await DB.saveGeo({geo_polygon});
+          S.geoPolygon = geo_polygon;
+        } else {
+          const {lat,lng} = st.points[0];
+          await DB.saveGeo({geo_lat:lat, geo_lon:lng});
+          S.geoLat=lat; S.geoLon=lng;
+        }
+        toast(t('geoSaved'));
+        closeModal(); render();
+      }catch(err){ dbErr(err); }
       break;
     }
     case 'geo-enable': {
