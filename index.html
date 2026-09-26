@@ -528,6 +528,12 @@ body.locked{overflow:hidden}
 .paygrid{display:grid;grid-template-columns:auto 1fr;gap:7px 14px;font-size:15px;align-items:baseline}
 .paygrid span{color:var(--bone-dim)}
 .paygrid b{word-break:break-word}
+/* iPhone oprava – casove polia v okne Upravit (iOS Safari) */
+.fg .two{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+.brk-row{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr) auto}
+input[type="time"],input[type="date"]{-webkit-appearance:none;appearance:none;display:block;box-sizing:border-box;min-width:0;max-width:100%;min-height:48px;text-align:left}
+input[type="time"]::-webkit-date-and-time-value,input[type="date"]::-webkit-date-and-time-value{text-align:left;min-height:1.45em}
+.scrim{cursor:pointer}.sheet{cursor:auto}
 </style>
 </head>
 <body>
